@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-100 text-slate-800 antialiased font-sans;
+  }
+}
+
+/* Accessible animations for dementia users: smooth and calm, not jarring */
+@keyframes calm-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+.animate-calm-pulse {
+  animation: calm-pulse 2.2s infinite ease-in-out;
+}
+
+/* Audio wave animation */
+@keyframes soundwave {
+  0%, 100% { height: 8px; }
+  50% { height: 28px; }
+}
+
+.soundwave-bar {
+  animation: soundwave 1.2s ease-in-out infinite;
+}
