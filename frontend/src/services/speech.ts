@@ -84,13 +84,38 @@ class SpeechService {
     }
   }
 
-  public speak(text: string, onEnd?: () => void) {
+  private fullSpokenText: string = '';
+  private lastSpokenText: string = '';
+  private lastOnEndCallback?: () => void;
+  private isPausedExplicitly: boolean = false;
+  private baseOffset: number = 0;
+  private charIndex: number = 0;
+  private utteranceSeq: number = 0;
+
+  public speak(text: string, onEnd?: () => void, baseOffset: number = 0) {
     if (!this.synth) return;
 
-    this.stopSpeaking();
+    // Reset paused state for fresh or continued speech
+    this.isPausedExplicitly = false;
+    this.baseOffset = baseOffset;
+    if (baseOffset === 0) {
+      this.fullSpokenText = text;
+      this.charIndex = 0;
+    }
+    this.lastSpokenText = text;
+    this.lastOnEndCallback = onEnd;
+
+    // Tag this utterance with a new sequence number
+    const seq = ++this.utteranceSeq;
+
+    // Cancel any previous utterance safely
+    try {
+      this.synth.cancel();
+    } catch {}
+    this.currentUtterance = null;
 
     const utterance = new SpeechSynthesisUtterance(text);
-    // Tone guidelines for dementia: calm, slightly slower (0.9x) for clarity
+    // Tone guidelines for dementia: calm, slightly slower (0.92x) for clarity
     utterance.rate = 0.92;
     utterance.pitch = 1.0;
 
@@ -106,19 +131,101 @@ class SpeechService {
       utterance.voice = naturalVoice;
     }
 
-    if (onEnd) {
-      utterance.onend = onEnd;
-    }
+    // Keep track of spoken boundary position so resume knows where it left off
+    utterance.onboundary = (e: any) => {
+      if (this.utteranceSeq !== seq) return;
+      if (typeof e.charIndex === 'number' && e.charIndex >= 0) {
+        this.charIndex = this.baseOffset + e.charIndex;
+      }
+    };
+
+    utterance.onend = () => {
+      if (this.utteranceSeq !== seq) return;
+      this.currentUtterance = null;
+      // If we paused intentionally, do NOT notify end
+      if (this.isPausedExplicitly) return;
+      this.charIndex = 0;
+      this.baseOffset = 0;
+      if (onEnd) onEnd();
+    };
+
+    utterance.onerror = (event: any) => {
+      if (this.utteranceSeq !== seq) return;
+      this.currentUtterance = null;
+      // Interrupted or canceled errors happen when stopSpeaking or pause is called intentionally
+      if (this.isPausedExplicitly || (event && (event.error === 'interrupted' || event.error === 'canceled'))) {
+        return;
+      }
+      this.charIndex = 0;
+      this.baseOffset = 0;
+      if (onEnd) onEnd();
+    };
 
     this.currentUtterance = utterance;
-    this.synth.speak(utterance);
+    try {
+      this.synth.speak(utterance);
+    } catch (err) {
+      console.warn('TTS speak error:', err);
+    }
   }
 
   public stopSpeaking() {
+    this.isPausedExplicitly = false;
+    this.charIndex = 0;
+    this.baseOffset = 0;
+    this.fullSpokenText = '';
+    this.utteranceSeq++;
+    this.currentUtterance = null;
     if (this.synth) {
-      this.synth.cancel();
+      try {
+        this.synth.cancel();
+      } catch {}
+    }
+  }
+
+  public pauseSpeaking() {
+    this.isPausedExplicitly = true;
+    if (this.synth) {
+      try {
+        this.synth.pause();
+      } catch {}
+      // In Chromium on macOS, synth.pause() can be ignored; cancel ensures immediate silence
+      try {
+        this.synth.cancel();
+      } catch {}
       this.currentUtterance = null;
     }
+  }
+
+  public resumeSpeaking(text?: string, onEnd?: () => void) {
+    if (!this.synth) return;
+    this.isPausedExplicitly = false;
+    const originalText = text || this.fullSpokenText || this.lastSpokenText;
+    const targetOnEnd = onEnd || this.lastOnEndCallback;
+
+    if (!originalText) return;
+
+    // Slice text from the last spoken word boundary so it resumes right where it stopped
+    let resumeText = originalText;
+    let resumeOffset = 0;
+    if (this.charIndex > 0 && this.charIndex < originalText.length) {
+      resumeText = originalText.slice(this.charIndex).trim();
+      resumeOffset = this.charIndex;
+      if (!resumeText) {
+        resumeText = originalText;
+        resumeOffset = 0;
+      }
+    }
+
+    this.speak(resumeText, targetOnEnd, resumeOffset);
+  }
+
+  public isSpeaking(): boolean {
+    return this.synth ? (this.synth.speaking && !this.isPausedExplicitly) : false;
+  }
+
+  public isSpeakingPaused(): boolean {
+    return this.isPausedExplicitly;
   }
 }
 

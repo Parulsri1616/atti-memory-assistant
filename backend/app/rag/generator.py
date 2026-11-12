@@ -22,7 +22,8 @@ def generate_local_response(
     intent: str,
     sources: List[Dict[str, Any]],
     time_info: Dict[str, Any],
-    patient_call_sign: str = settings.DEFAULT_PATIENT_CALL_SIGN
+    patient_call_sign: str = None,
+    caregiver_name: str = None
 ) -> Tuple[str, bool, float]:
     """
     Built-in grounded generation engine. Guarantees 0ms latency, zero hallucination,
@@ -30,7 +31,8 @@ def generate_local_response(
     Returns: (answer, is_fallback, confidence)
     """
     q = query.lower().strip()
-    caregiver = settings.CAREGIVER_NAME
+    caregiver = caregiver_name or settings.CAREGIVER_NAME
+    call_sign = patient_call_sign or settings.DEFAULT_PATIENT_CALL_SIGN
 
     # Conversational / Greetings
     if intent == "conversational":
@@ -43,7 +45,7 @@ def generate_local_response(
         if any(w in q for w in ["hello", "hi", "good morning", "good afternoon"]):
             greeting = "Good morning" if time_info["period"] == "morning" else ("Good afternoon" if time_info["period"] == "afternoon" else "Good evening")
             return (
-                f"{greeting}! Today is {time_info['day_name']}. How can I help you right now?",
+                f"{greeting} {call_sign}! Today is {time_info['day_name']}. How can I help you right now?",
                 False,
                 1.0
             )
@@ -88,13 +90,10 @@ def generate_local_response(
         r_time = top_source.get("time", "")
         # Format time to spoken
         hour, minute = [int(x) for x in r_time.split(":")]
-        am_pm = "in the morning" if hour < 12 else ("in the afternoon" if hour < 17 else "in the evening")
         disp_hour = hour % 12
         if disp_hour == 0:
             disp_hour = 12
-        nice_time = f"{disp_hour}:{minute:02d} {am_pm}"
-        
-        answer = f"Today is {time_info['day_name']}. Next at {disp_hour}:{minute:02d} { 'AM' if hour < 12 else 'PM' } is {top_source.get('title')}."
+        answer = f"Today is {time_info['day_name']}. Next at {disp_hour}:{minute:02d} {'AM' if hour < 12 else 'PM'} is {top_source.get('title')}."
         return (answer, False, 0.95)
 
     # Life Events / Reminiscence
@@ -111,15 +110,20 @@ def generate_llm_response(
     query: str,
     intent: str,
     sources: List[Dict[str, Any]],
-    time_info: Dict[str, Any]
+    time_info: Dict[str, Any],
+    patient_call_sign: str = None,
+    caregiver_name: str = None
 ) -> Tuple[str, bool, float]:
     """
     Optional LLM generation using Google Gemini or OpenAI when API key is provided.
     Falls back gracefully to local grounded response if network or key is unavailable.
     """
+    caregiver = caregiver_name or settings.CAREGIVER_NAME
+    call_sign = patient_call_sign or settings.DEFAULT_PATIENT_CALL_SIGN
+
     # If no API key configured, use local grounded engine
     if not settings.GEMINI_API_KEY and not settings.OPENAI_API_KEY:
-        return generate_local_response(query, intent, sources, time_info)
+        return generate_local_response(query, intent, sources, time_info, patient_call_sign=call_sign, caregiver_name=caregiver)
 
     # Prepare grounding context
     context_text = "\n".join([f"- [{s.get('type')}] {s.get('content')}" for s in sources])
@@ -129,8 +133,8 @@ def generate_llm_response(
 CURRENT TIME:
 Today is {time_info['day_name']}, {time_info['date_str']}, current time {time_info['time_spoken']} ({time_info['period']}).
 
-CAREGIVER NAME: {settings.CAREGIVER_NAME}
-PATIENT CALL SIGN: {settings.DEFAULT_PATIENT_CALL_SIGN}
+CAREGIVER NAME: {caregiver}
+PATIENT CALL SIGN: {call_sign}
 
 USER QUESTION:
 "{query}"
@@ -142,7 +146,7 @@ Generate a short, reassuring 1-2 sentence response grounded strictly in the memo
             # Gemini REST API call
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
             payload = {
-                "contents": [{"parts": [{"text": f"{SYSTEM_PROMPT.format(caregiver=settings.CAREGIVER_NAME)}\n\n{prompt}"}]}],
+                "contents": [{"parts": [{"text": f"{SYSTEM_PROMPT.format(caregiver=caregiver)}\n\n{prompt}"}]}],
                 "generationConfig": {"temperature": 0.2, "maxOutputTokens": 100}
             }
             res = requests.post(url, json=payload, timeout=6)
@@ -155,4 +159,4 @@ Generate a short, reassuring 1-2 sentence response grounded strictly in the memo
         logger.warning(f"Gemini API call failed, using local engine: {e}")
 
     # Fallback to local grounded generator
-    return generate_local_response(query, intent, sources, time_info)
+    return generate_local_response(query, intent, sources, time_info, patient_call_sign=call_sign, caregiver_name=caregiver)

@@ -1,3 +1,36 @@
+export interface PatientProfile {
+  id: number;
+  email: string;
+  name: string;
+  role?: string;
+  account_status?: string;
+  call_sign: string;
+  caregiver_name: string;
+  is_demo: boolean;
+  created_at: string;
+  associated_patient_id?: number;
+  associated_patient_name?: string;
+  age?: number;
+  date_of_birth?: string;
+  address?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
+  blood_group?: string;
+  allergies?: string;
+  medical_conditions?: string;
+  care_instructions?: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  refresh_token?: string;
+  token?: string;
+  token_type: string;
+  expires_in?: number;
+  expires_at?: string;
+  patient: PatientProfile;
+}
+
 export interface Person {
   id: number;
   name: string;
@@ -83,4 +116,32 @@ export interface AnalyticsData {
     routines: number;
     medications: number;
   };
+}
+
+export interface EmergencyProfile {
+  patient_id: number;
+  name: string;
+  call_sign: string;
+  age?: number;
+  date_of_birth?: string;
+  address?: string;
+  caregiver_name: string;
+  caregiver_phone: string;
+  emergency_contact_relation?: string;
+  doctor_name: string;
+  doctor_phone: string;
+  blood_group?: string;
+  medical_conditions: string;
+  allergies: string;
+  care_instructions: string;
+}
+
+export interface SystemStatus {
+  status: string;
+  patient_name: string;
+  caregiver_name: string;
+  llm_engine: string;
+  offline_ready: boolean;
+  lan_ip?: string;
+  network_app_url?: string;
 }

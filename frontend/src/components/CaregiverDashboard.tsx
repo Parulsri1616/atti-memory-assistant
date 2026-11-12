@@ -15,9 +15,12 @@ import {
   Phone,
   Clock,
   Sparkles,
-  Search
+  Search,
+  Shield,
+  LogOut
 } from 'lucide-react';
 import { api } from '../services/api';
+import { AboutMeSection } from './AboutMeSection';
 import {
   Person,
   DailyRoutine,
@@ -25,16 +28,23 @@ import {
   PersonalItem,
   LifeEvent,
   InteractionLog,
-  AnalyticsData
+  AnalyticsData,
+  PatientProfile
 } from '../types';
 
 interface CaregiverDashboardProps {
-  onBackToPatient: () => void;
+  onBackToPatient?: () => void;
+  onLogout?: () => void;
+  patient?: PatientProfile | null;
 }
 
-export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onBackToPatient }) => {
+export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
+  onBackToPatient,
+  onLogout,
+  patient
+}) => {
   const [activeTab, setActiveTab] = useState<
-    'analytics' | 'people' | 'routines' | 'meds' | 'items' | 'events'
+    'analytics' | 'profile' | 'people' | 'routines' | 'meds' | 'items' | 'events'
   >('analytics');
 
   const [loading, setLoading] = useState(false);
@@ -145,15 +155,22 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onBackTo
       {/* Top Caregiver Bar */}
       <header className="bg-sky-900 text-white px-6 py-4 flex flex-wrap items-center justify-between gap-4 shadow-md">
         <div className="flex items-center gap-3">
-          <button
-            onClick={onBackToPatient}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-800 hover:bg-sky-700 text-sky-100 font-bold text-sm transition-colors border border-sky-600/40"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Return to Patient View</span>
-          </button>
+          {onBackToPatient && (
+            <button
+              onClick={onBackToPatient}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-800 hover:bg-sky-700 text-sky-100 font-bold text-sm transition-colors border border-sky-600/40"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Return to Patient View</span>
+            </button>
+          )}
           <div className="h-6 w-px bg-sky-700 mx-1 hidden sm:block" />
-          <h2 className="text-xl font-bold tracking-tight">Caregiver Portal — ATTI</h2>
+          <div>
+            <h2 className="text-xl font-bold tracking-tight">Caregiver Portal — ATTI</h2>
+            <p className="text-xs text-sky-200">
+              Caregiver: <strong>{patient?.name || 'Ananya Sharma'}</strong> • Managing Patient: <strong>{patient?.associated_patient_name || 'Meera Sharma'}</strong>
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -165,6 +182,15 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onBackTo
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-900/80 hover:bg-rose-800 rounded-xl text-sm font-semibold text-rose-100 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -173,6 +199,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onBackTo
         <div className="flex gap-1 max-w-6xl mx-auto">
           {[
             { id: 'analytics', label: 'Overview & Activity', icon: Activity },
+            { id: 'profile', label: 'Patient Profile & QR Code', icon: Shield },
             { id: 'people', label: 'People & Family', icon: Users },
             { id: 'routines', label: 'Daily Routines', icon: Calendar },
             { id: 'meds', label: 'Medications', icon: Pill },
@@ -725,6 +752,28 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onBackTo
             </div>
           </div>
         )}
+
+        {/* --- TAB: PATIENT PROFILE & EMERGENCY QR --- */}
+        {activeTab === 'profile' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <AboutMeSection
+              patient={
+                patient?.associated_patient_id
+                  ? {
+                      id: patient.associated_patient_id,
+                      name: patient.associated_patient_name || 'Meera Sharma',
+                      call_sign: 'Meera',
+                      email: '',
+                      caregiver_name: patient.name,
+                      is_demo: true,
+                      created_at: ''
+                    }
+                  : (patient || null)
+              }
+              isModal={false}
+            />
+          </div>
+        )}
       </main>
 
       {/* Dynamic Add Record Modal */}
@@ -739,7 +788,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({ onBackTo
               <form onSubmit={handleAddPerson} className="flex flex-col gap-3">
                 <input
                   type="text"
-                  placeholder="Full Name (e.g. Rahul)"
+                  placeholder="Full Name (e.g. Rajesh Sharma)"
                   value={personForm.name}
                   onChange={(e) => setPersonForm({ ...personForm, name: e.target.value })}
                   className="px-3 py-2 border rounded-xl text-sm"

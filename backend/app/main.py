@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
-from .database import engine, Base, SessionLocal
+from .database import engine, Base, SessionLocal, init_db_and_migrate
 from .seed_data import seed_database_if_empty
-from .routers import assistant, memories, routines, logs
+from .routers import assistant, memories, routines, logs, auth
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Initialize database tables and run safe column migrations
+init_db_and_migrate()
 
 # Seed initial dementia assistant records
 with SessionLocal() as db:
@@ -18,16 +18,17 @@ app = FastAPI(
     description="Conversational Memory Assistant tailored for individuals with mild dementia and their caregivers."
 )
 
-# Enable CORS for frontend
+# Enable CORS with credentials support for frontend (supports localhost and local network mobile access)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include Routers under /api
+app.include_router(auth.router, prefix=settings.API_PREFIX)
 app.include_router(assistant.router, prefix=settings.API_PREFIX)
 app.include_router(memories.router, prefix=settings.API_PREFIX)
 app.include_router(routines.router, prefix=settings.API_PREFIX)

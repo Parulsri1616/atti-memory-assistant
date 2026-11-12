@@ -10,3 +10,7 @@ dist/
 build/
 .DS_Store
 *.egg-info/
+
+# ATTI local database
+backend/atti.db
+backend/*.db

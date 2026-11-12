@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
 from ..models import Person, DailyRoutine, Medication, PersonalItem, LifeEvent
 from .date_resolver import resolve_datetime, detect_time_intent
@@ -10,7 +10,7 @@ def classify_intent(query: str) -> str:
     Designed to be tolerant of brief, conversational, or repetitive speech.
     """
     q = query.lower().strip()
-    
+
     # 1. Direct Time/Date
     if any(k in q for k in ["what time", "what day", "what date", "which day", "today's date", "current time", "kitne baje"]):
         return "time_date"
@@ -42,9 +42,9 @@ def classify_intent(query: str) -> str:
     # Default fallback intent: semantic memory lookup
     return "general_lookup"
 
-def retrieve_context(query: str, db: Session, client_time_str: str = None) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
+def retrieve_context(query: str, db: Session, client_time_str: str = None, patient_id: Optional[int] = None) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Retrieves grounded personal records matching the query and intent.
+    Retrieves grounded personal records matching the query and intent, scoped to the patient.
     Returns: (intent, retrieved_sources, time_info)
     """
     intent = classify_intent(query)
@@ -63,7 +63,10 @@ def retrieve_context(query: str, db: Session, client_time_str: str = None) -> Tu
         return intent, sources, time_info
 
     if intent == "medication_lookup":
-        meds = db.query(Medication).all()
+        meds_q = db.query(Medication)
+        if patient_id is not None:
+            meds_q = meds_q.filter(Medication.patient_id == patient_id)
+        meds = meds_q.all()
         # Rank by match
         for med in meds:
             score = 0
@@ -85,7 +88,10 @@ def retrieve_context(query: str, db: Session, client_time_str: str = None) -> Tu
         sources.sort(key=lambda s: s.get("score", 0), reverse=True)
 
     elif intent == "item_lookup":
-        items = db.query(PersonalItem).all()
+        items_q = db.query(PersonalItem)
+        if patient_id is not None:
+            items_q = items_q.filter(PersonalItem.patient_id == patient_id)
+        items = items_q.all()
         for item in items:
             score = 0
             name_low = item.item_name.lower()
@@ -104,7 +110,10 @@ def retrieve_context(query: str, db: Session, client_time_str: str = None) -> Tu
         sources.sort(key=lambda s: s.get("score", 0), reverse=True)
 
     elif intent == "person_lookup":
-        people = db.query(Person).all()
+        people_q = db.query(Person)
+        if patient_id is not None:
+            people_q = people_q.filter(Person.patient_id == patient_id)
+        people = people_q.all()
         for p in people:
             score = 0
             name_low = p.name.lower()
@@ -128,7 +137,10 @@ def retrieve_context(query: str, db: Session, client_time_str: str = None) -> Tu
         sources.sort(key=lambda s: s.get("score", 0), reverse=True)
 
     elif intent == "routine_lookup":
-        routines = db.query(DailyRoutine).filter(DailyRoutine.is_active == True).all()
+        routines_q = db.query(DailyRoutine).filter(DailyRoutine.is_active == True)
+        if patient_id is not None:
+            routines_q = routines_q.filter(DailyRoutine.patient_id == patient_id)
+        routines = routines_q.all()
         current_time_str = time_info["time_str"]
         period = time_info["period"]
 
@@ -165,7 +177,10 @@ def retrieve_context(query: str, db: Session, client_time_str: str = None) -> Tu
         sources.sort(key=lambda s: (s.get("score", 0), -abs(int(s.get("time", "12:00").replace(":", "")) - int(current_time_str.replace(":", "")))), reverse=True)
 
     elif intent == "event_recall":
-        events = db.query(LifeEvent).all()
+        events_q = db.query(LifeEvent)
+        if patient_id is not None:
+            events_q = events_q.filter(LifeEvent.patient_id == patient_id)
+        events = events_q.all()
         for ev in events:
             score = 0
             title_low = ev.title.lower()
@@ -189,13 +204,21 @@ def retrieve_context(query: str, db: Session, client_time_str: str = None) -> Tu
     # If general lookup or empty sources so far, try fallback cross-entity scan
     if not sources and intent not in ["time_date", "conversational"]:
         # Broad scan across people, routines, items, events
-        for p in db.query(Person).all():
+        p_q = db.query(Person)
+        it_q = db.query(PersonalItem)
+        m_q = db.query(Medication)
+        if patient_id is not None:
+            p_q = p_q.filter(Person.patient_id == patient_id)
+            it_q = it_q.filter(PersonalItem.patient_id == patient_id)
+            m_q = m_q.filter(Medication.patient_id == patient_id)
+
+        for p in p_q.all():
             if p.name.lower() in q or p.relationship.lower() in q:
                 sources.append({"type": "person", "title": p.name, "content": f"{p.name} is your {p.relationship}. {p.notes or ''}"})
-        for it in db.query(PersonalItem).all():
+        for it in it_q.all():
             if it.item_name.lower() in q:
                 sources.append({"type": "personal_item", "title": it.item_name, "content": f"Your {it.item_name} is kept {it.location}."})
-        for m in db.query(Medication).all():
+        for m in m_q.all():
             if m.name.lower() in q:
                 sources.append({"type": "medication", "title": m.name, "content": f"{m.name}: {m.instructions or ''} at {m.schedule_time}."})
 
