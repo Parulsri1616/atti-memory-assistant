@@ -398,38 +398,6 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                     Sign Up · नया खाता बनाएं
                   </button>
                 </div>
-
-                {/* Demo Quick Shortcuts */}
-                <div className="relative my-2">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200" />
-                  </div>
-                  <div className="relative flex justify-center text-xs">
-                    <span className="bg-white px-2 text-slate-400 font-medium">or test with demo accounts</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleDemoLogin('patient')}
-                    disabled={isLoading}
-                    className="w-full py-2.5 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 active:scale-98 text-sky-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all border border-sky-200 cursor-pointer"
-                  >
-                    <User className="w-3.5 h-3.5 text-sky-600" />
-                    <span>{loadingRole === 'patient' ? 'Connecting...' : 'Continue as Demo Patient'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDemoLogin('family')}
-                    disabled={isLoading}
-                    className="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-98 text-rose-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all border border-rose-200 cursor-pointer"
-                  >
-                    <Heart className="w-3.5 h-3.5 text-rose-600" />
-                    <span>{loadingRole === 'family' ? 'Connecting...' : 'Continue as Demo Family Member'}</span>
-                  </button>
-                </div>
               </>
             ) : (
               /* SIGN UP FORM (Appears in place of Sign In) */
