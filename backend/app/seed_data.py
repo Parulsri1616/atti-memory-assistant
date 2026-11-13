@@ -1,6 +1,10 @@
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from .models import Patient, Person, DailyRoutine, Medication, PersonalItem, LifeEvent, InteractionLog
+from .models import (
+    Patient, Person, DailyRoutine, Medication, PersonalItem, LifeEvent, InteractionLog,
+    DoctorAppointment, SafeZone, LocationLog, EmergencyQR, CareTeamMember, Notification,
+    FamiliarPlace, MemoryFact, CaregiverObservation, MedicationLog, ActivityLog
+)
 from .auth import hash_password
 
 def seed_database_if_empty(db: Session):
@@ -104,6 +108,8 @@ def seed_database_if_empty(db: Session):
     db.query(Person).filter(Person.patient_id == demo_patient.id, Person.name.ilike("%auntie%")).delete()
     db.query(Person).filter(Person.patient_id == demo_patient.id, Person.name.ilike("%uncle%")).delete()
     db.query(DailyRoutine).filter(DailyRoutine.patient_id == demo_patient.id, DailyRoutine.title.ilike("%Amlodipine%")).delete()
+    db.query(DailyRoutine).filter(DailyRoutine.patient_id == demo_patient.id, DailyRoutine.description.ilike("%Sunita Ji in the colony park%")).delete()
+    db.query(DailyRoutine).filter(DailyRoutine.patient_id == demo_patient.id, DailyRoutine.title == "Dinner & Evening Medicine").delete()
     db.query(Medication).filter(Medication.patient_id == demo_patient.id, Medication.name == "Amlodipine").delete()
     db.query(LifeEvent).filter(LifeEvent.patient_id == demo_patient.id, LifeEvent.title.ilike("%Rahul%")).delete()
     db.query(LifeEvent).filter(LifeEvent.patient_id == demo_patient.id, LifeEvent.description.ilike("%Rahul%")).delete()
@@ -184,12 +190,17 @@ def seed_database_if_empty(db: Session):
                 patient_id=demo_patient.id,
                 name="Late Anand Sharma",
                 relationship="Spouse",
-                phone="In Loving Memory",
+                phone=None,
                 notes="Your beloved late husband, an accomplished civil engineer. You were happily married for 42 wonderful years.",
                 visit_schedule="Memorial portrait in the living room.",
                 keywords="husband, spouse, anand, anand sharma, late husband"
             )
         )
+    else:
+        late_anand = db.query(Person).filter(Person.name == "Late Anand Sharma").first()
+        if late_anand and late_anand.phone:
+            late_anand.phone = None
+            db.commit()
     if people_to_add:
         db.add_all(people_to_add)
         db.commit()
@@ -391,3 +402,382 @@ def seed_database_if_empty(db: Session):
         ]
         db.add_all(sample_logs)
         db.commit()
+
+    # 8. Seed Doctor Appointments for Demo Patient
+    if db.query(DoctorAppointment).filter(DoctorAppointment.patient_id == demo_patient.id).count() == 0:
+        appts = [
+            DoctorAppointment(
+                patient_id=demo_patient.id,
+                doctor_name="Dr. Arvind Mehra",
+                clinic_or_hospital="Fortis Hospital, Vasant Kunj",
+                appointment_date="2026-11-20",
+                appointment_time="11:00 AM",
+                notes="Routine Geriatric Consultation & Blood Pressure Review. Carry latest blood test reports.",
+                advance_reminder_hours=24,
+                status="scheduled"
+            ),
+            DoctorAppointment(
+                patient_id=demo_patient.id,
+                doctor_name="Dr. Shweta Rastogi",
+                clinic_or_hospital="Max Healthcare, Saket",
+                appointment_date="2026-12-05",
+                appointment_time="03:30 PM",
+                notes="Annual ophthalmology and retina eye checkup.",
+                advance_reminder_hours=48,
+                status="scheduled"
+            )
+        ]
+        db.add_all(appts)
+        db.commit()
+
+    # 9. Seed Safe Zone for Demo Patient
+    if not db.query(SafeZone).filter(SafeZone.patient_id == demo_patient.id).first():
+        sz = SafeZone(
+            patient_id=demo_patient.id,
+            name="Home Safe Zone",
+            center_latitude=28.5355,
+            center_longitude=77.2100,
+            radius_meters=500,
+            address="24, Green Park, New Delhi",
+            is_active=True,
+            monitoring_enabled=True
+        )
+        db.add(sz)
+        db.commit()
+
+    # 10. Seed Location Logs for Demo Patient
+    if db.query(LocationLog).filter(LocationLog.patient_id == demo_patient.id).count() == 0:
+        locs = [
+            LocationLog(
+                patient_id=demo_patient.id,
+                latitude=28.5355,
+                longitude=77.2100,
+                address="24, Green Park, New Delhi",
+                accuracy_meters=10.0,
+                is_inside_safe_zone=True,
+                status_label="At Home",
+                battery_level=88,
+                timestamp=datetime.utcnow()
+            ),
+            LocationLog(
+                patient_id=demo_patient.id,
+                latitude=28.5360,
+                longitude=77.2090,
+                address="Green Park Deer Park Path, New Delhi",
+                accuracy_meters=14.0,
+                is_inside_safe_zone=True,
+                status_label="Near Park Gate",
+                battery_level=92,
+                timestamp=datetime.utcnow() - timedelta(hours=3)
+            )
+        ]
+        db.add_all(locs)
+        db.commit()
+
+    # 11. Seed Emergency QR for Demo Patient
+    if not db.query(EmergencyQR).filter(EmergencyQR.patient_id == demo_patient.id).first():
+        eqr = EmergencyQR(
+            patient_id=demo_patient.id,
+            qr_code_hash="meera-sharma-atti-safe-qr-2026",
+            status="active",
+            scan_count=1,
+            last_scanned_at=datetime.utcnow() - timedelta(days=2),
+            scan_history_notes="Routine verification scan on 11 Nov 2026 by daughter Ananya."
+        )
+        db.add(eqr)
+        db.commit()
+
+    # 12. Seed Care Team Members for Demo Patient
+    if db.query(CareTeamMember).filter(CareTeamMember.patient_id == demo_patient.id).count() == 0:
+        members = [
+            CareTeamMember(
+                patient_id=demo_patient.id,
+                name="Ananya Sharma",
+                relationship_or_role="Daughter (Primary Guardian)",
+                phone="+91 98765 12345",
+                email="ananya.demo@atti.example",
+                permissions="full",
+                is_primary=True,
+                care_notes="Lives nearby in Green Park. Checks in daily morning and evening."
+            ),
+            CareTeamMember(
+                patient_id=demo_patient.id,
+                name="Dr. Arvind Mehra",
+                relationship_or_role="Consulting Physician",
+                phone="+91 98112 34567",
+                email="dr.mehra@fortis.example",
+                permissions="view_only",
+                is_primary=False,
+                care_notes="Geriatric care physician at Fortis Vasant Kunj. Monitors BP and cognition."
+            ),
+            CareTeamMember(
+                patient_id=demo_patient.id,
+                name="Sunita Verma",
+                relationship_or_role="Visiting Nurse",
+                phone="+91 98223 44556",
+                email="sunita.nurse@care.example",
+                permissions="emergency_only",
+                is_primary=False,
+                care_notes="Visits on Monday, Wednesday, Friday mornings for vital signs and companionship."
+            )
+        ]
+        db.add_all(members)
+        db.commit()
+
+    # 13. Seed Familiar Places for Demo Patient
+    if db.query(FamiliarPlace).filter(FamiliarPlace.patient_id == demo_patient.id).count() == 0:
+        places = [
+            FamiliarPlace(
+                patient_id=demo_patient.id,
+                name="Home (Green Park Residence)",
+                address_or_location="24, Green Park, New Delhi",
+                category="home",
+                description="Your family home of 35 years with the peaceful front plant balcony.",
+                is_safe_zone=True
+            ),
+            FamiliarPlace(
+                patient_id=demo_patient.id,
+                name="Deer Park (Hauz Khas)",
+                address_or_location="Hauz Khas, New Delhi (500m west of residence)",
+                category="park",
+                description="Your favourite peaceful morning walking trail around the serene deer enclosure and lake.",
+                is_safe_zone=False
+            ),
+            FamiliarPlace(
+                patient_id=demo_patient.id,
+                name="Arya Samaj Mandir",
+                address_or_location="Green Park Main Market, New Delhi",
+                category="temple",
+                description="Community mandir visited for Sunday morning prayer and peaceful quiet reflection.",
+                is_safe_zone=False
+            ),
+            FamiliarPlace(
+                patient_id=demo_patient.id,
+                name="Fortis Hospital",
+                address_or_location="Sector B, Pocket 1, Aruna Asaf Ali Marg, Vasant Kunj",
+                category="clinic",
+                description="Hospital clinic of Dr. Arvind Mehra for regular health reviews.",
+                is_safe_zone=False
+            )
+        ]
+        db.add_all(places)
+        db.commit()
+
+    # 14. Seed Memory Facts for Demo Patient
+    if db.query(MemoryFact).filter(MemoryFact.patient_id == demo_patient.id).count() == 0:
+        facts = [
+            MemoryFact(
+                patient_id=demo_patient.id,
+                category="history",
+                question_or_topic="Where did I teach?",
+                answer_or_detail="You were a respected Professor of English Literature at Miranda House, Delhi University, for over 32 inspiring years.",
+                is_verified=True,
+                notes="Verified with daughter Ananya."
+            ),
+            MemoryFact(
+                patient_id=demo_patient.id,
+                category="name",
+                question_or_topic="Who is Tara?",
+                answer_or_detail="Tara is your beloved 19-year-old granddaughter, daughter of Ananya. She is studying architecture at SPA Delhi.",
+                is_verified=True,
+                notes="Verified."
+            ),
+            MemoryFact(
+                patient_id=demo_patient.id,
+                category="habit",
+                question_or_topic="Morning Routine Habits",
+                answer_or_detail="You always drink a warm glass of water upon waking, open the curtains for sunlight, and tend to your potted jasmine and tulsi plants.",
+                is_verified=True,
+                notes="Verified."
+            ),
+            MemoryFact(
+                patient_id=demo_patient.id,
+                category="faq",
+                question_or_topic="Where are my spare house keys?",
+                answer_or_detail="Your spare house keys are kept safely inside the decorative brass bowl on the hallway console table.",
+                is_verified=True,
+                notes="Verified."
+            ),
+            MemoryFact(
+                patient_id=demo_patient.id,
+                category="detail",
+                question_or_topic="Favourite Evening Music",
+                answer_or_detail="You love listening to Pandit Ravi Shankar sitar recordings and classical Hindustani ragas during your evening ginger tea time.",
+                is_verified=True,
+                notes="Verified."
+            )
+        ]
+        db.add_all(facts)
+        db.commit()
+
+    # 15. Seed Notifications for Demo Patient & Guardian
+    if db.query(Notification).filter(Notification.patient_id == demo_patient.id).count() == 0:
+        notifs = [
+            Notification(
+                patient_id=demo_patient.id,
+                recipient_role="guardian",
+                title="Medication Refill Needed",
+                message="Stock for Metformin is low (4 tablets remaining). Refill scheduled before the weekend.",
+                notification_type="refill",
+                is_read=False,
+                created_at=datetime.utcnow() - timedelta(hours=2)
+            ),
+            Notification(
+                patient_id=demo_patient.id,
+                recipient_role="both",
+                title="Doctor Consultation Coming Up",
+                message="Upcoming appointment with Dr. Arvind Mehra at Fortis Hospital on 20 November at 11:00 AM.",
+                notification_type="appointment",
+                is_read=False,
+                created_at=datetime.utcnow() - timedelta(hours=5)
+            ),
+            Notification(
+                patient_id=demo_patient.id,
+                recipient_role="guardian",
+                title="Safe Zone Check Normal",
+                message="Patient location verified at 24, Green Park residence. Safe zone active.",
+                notification_type="safe_zone",
+                is_read=True,
+                created_at=datetime.utcnow() - timedelta(hours=8)
+            )
+        ]
+        db.add_all(notifs)
+        db.commit()
+
+    # Update medications with stock & refill status
+    telmi = db.query(Medication).filter(Medication.patient_id == demo_patient.id, Medication.name == "Telmisartan").first()
+    if telmi:
+        telmi.current_stock = 24
+        telmi.refill_threshold = 5
+        telmi.refill_reminder_days = 5
+        telmi.needs_refill = False
+        telmi.frequency = "Every day"
+        telmi.timing_slot = "Morning"
+
+    met = db.query(Medication).filter(Medication.patient_id == demo_patient.id, Medication.name == "Metformin").first()
+    if met:
+        met.current_stock = 4
+        met.refill_threshold = 5
+        met.refill_reminder_days = 5
+        met.needs_refill = True
+        met.frequency = "Every day"
+        met.timing_slot = "Afternoon"
+
+    calc = db.query(Medication).filter(Medication.patient_id == demo_patient.id, Medication.name.ilike("%Calcium%")).first()
+    if calc:
+        calc.current_stock = 18
+        calc.refill_threshold = 5
+        calc.refill_reminder_days = 5
+        calc.needs_refill = False
+        calc.frequency = "Every day"
+        calc.timing_slot = "Night"
+
+    # 16. Seed Caregiver Observations for Demo Patient
+    if db.query(CaregiverObservation).filter(CaregiverObservation.patient_id == demo_patient.id).count() == 0:
+        obs = [
+            CaregiverObservation(
+                patient_id=demo_patient.id,
+                recorded_by="Ananya Sharma",
+                category="sleep",
+                severity="normal",
+                observation_text="Woke up refreshed after 7.5 hours of uninterrupted sleep. Morning mood was cheerful and conversational.",
+                observed_at=datetime.utcnow() - timedelta(hours=6)
+            ),
+            CaregiverObservation(
+                patient_id=demo_patient.id,
+                recorded_by="Ananya Sharma",
+                category="appetite",
+                severity="normal",
+                observation_text="Ate complete breakfast (idli and warm vegetable sambar). Finished full glass of fresh pomegranate juice with enjoyment.",
+                observed_at=datetime.utcnow() - timedelta(hours=4)
+            ),
+            CaregiverObservation(
+                patient_id=demo_patient.id,
+                recorded_by="Ananya Sharma",
+                category="mood",
+                severity="normal",
+                observation_text="Spent 25 minutes peacefully watering balcony plants. Recognized neighbor Sunita and exchanged warm greetings.",
+                observed_at=datetime.utcnow() - timedelta(days=1, hours=2)
+            ),
+            CaregiverObservation(
+                patient_id=demo_patient.id,
+                recorded_by="Ananya Sharma",
+                category="doctor_note",
+                severity="noteworthy",
+                observation_text="Discuss morning blood pressure readings (avg 128/82) and ask Dr. Mehra if Metformin afternoon timing is optimal with lunch.",
+                observed_at=datetime.utcnow() - timedelta(days=2)
+            ),
+            CaregiverObservation(
+                patient_id=demo_patient.id,
+                recorded_by="Ananya Sharma",
+                category="routine",
+                severity="normal",
+                observation_text="Evening walk at Deer Park was active and brisk (approx 1,800 steps). Enjoyed watching the ducks by the pond.",
+                observed_at=datetime.utcnow() - timedelta(days=3)
+            )
+        ]
+        db.add_all(obs)
+        db.commit()
+
+    # 17. Seed Historical Activity Logs (Past 7 Days for Real Trend Analysis)
+    if db.query(ActivityLog).filter(ActivityLog.patient_id == demo_patient.id).count() == 0:
+        routines = db.query(DailyRoutine).filter(DailyRoutine.patient_id == demo_patient.id).all()
+        hist_logs = []
+        for days_ago in range(1, 8):
+            log_date = datetime.utcnow() - timedelta(days=days_ago)
+            for r in routines:
+                # Realistic pattern: ~85% completed, ~10% missed, ~5% snoozed
+                if (r.id + days_ago) % 7 == 0:
+                    status = "missed"
+                    note = "Missed due to rain / delay"
+                elif (r.id + days_ago) % 11 == 0:
+                    status = "acknowledged"
+                    note = "Acknowledged by patient"
+                else:
+                    status = "completed"
+                    note = "Completed on schedule"
+                hist_logs.append(ActivityLog(
+                    routine_id=r.id,
+                    patient_id=demo_patient.id,
+                    title=r.title,
+                    category=r.category,
+                    scheduled_time=r.time,
+                    status=status,
+                    timestamp=log_date,
+                    notes=note
+                ))
+        db.add_all(hist_logs)
+        db.commit()
+
+    # 18. Seed Historical Medication Logs (Past 7 Days for Adherence Analysis)
+    if db.query(MedicationLog).filter(MedicationLog.patient_id == demo_patient.id).count() == 0:
+        meds = db.query(Medication).filter(Medication.patient_id == demo_patient.id).all()
+        med_logs = []
+        for days_ago in range(1, 8):
+            dt = datetime.utcnow() - timedelta(days=days_ago)
+            d_str = dt.strftime("%Y-%m-%d")
+            for m in meds:
+                # Realistic: high acknowledgement (95%), good intake (90%)
+                is_missed = (m.id + days_ago) % 13 == 0
+                if is_missed:
+                    status = "missed"
+                    ack_at = None
+                    taken_at = None
+                else:
+                    status = "completed"
+                    ack_at = dt
+                    taken_at = dt + timedelta(minutes=10)
+                med_logs.append(MedicationLog(
+                    medication_id=m.id,
+                    patient_id=demo_patient.id,
+                    scheduled_time=m.schedule_time,
+                    scheduled_date=d_str,
+                    status=status,
+                    acknowledged_at=ack_at,
+                    taken_at=taken_at,
+                    notes="Intake verified" if taken_at else "Missed dose alert"
+                ))
+        db.add_all(med_logs)
+        db.commit()
+
+    db.commit()

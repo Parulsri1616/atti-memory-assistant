@@ -1,7 +1,7 @@
 import re
 from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
-from ..models import Person, DailyRoutine, Medication, PersonalItem, LifeEvent
+from ..models import Person, DailyRoutine, Medication, PersonalItem, LifeEvent, MemoryFact, FamiliarPlace
 from .date_resolver import resolve_datetime, detect_time_intent
 
 def classify_intent(query: str) -> str:
@@ -201,6 +201,32 @@ def retrieve_context(query: str, db: Session, client_time_str: str = None, patie
                 })
         sources.sort(key=lambda s: s.get("score", 0), reverse=True)
 
+    # Scan verified memory facts and familiar places
+    facts_q = db.query(MemoryFact).filter(MemoryFact.is_verified == True)
+    places_q = db.query(FamiliarPlace)
+    if patient_id is not None:
+        facts_q = facts_q.filter(MemoryFact.patient_id == patient_id)
+        places_q = places_q.filter(FamiliarPlace.patient_id == patient_id)
+
+    for fact in facts_q.all():
+        q_words = [w for w in fact.question_or_topic.lower().split() if len(w) > 3]
+        if fact.question_or_topic.lower() in q or any(w in q for w in q_words):
+            sources.append({
+                "type": "memory_fact",
+                "title": fact.question_or_topic,
+                "content": f"{fact.question_or_topic}: {fact.answer_or_detail}",
+                "score": 6
+            })
+
+    for pl in places_q.all():
+        if pl.name.lower() in q or any(w in q for w in pl.name.lower().split() if len(w) > 3):
+            sources.append({
+                "type": "familiar_place",
+                "title": pl.name,
+                "content": f"{pl.name} is located at {pl.address_or_location}. {pl.description or ''}".strip(),
+                "score": 5
+            })
+
     # If general lookup or empty sources so far, try fallback cross-entity scan
     if not sources and intent not in ["time_date", "conversational"]:
         # Broad scan across people, routines, items, events
@@ -222,4 +248,5 @@ def retrieve_context(query: str, db: Session, client_time_str: str = None, patie
             if m.name.lower() in q:
                 sources.append({"type": "medication", "title": m.name, "content": f"{m.name}: {m.instructions or ''} at {m.schedule_time}."})
 
+    sources.sort(key=lambda s: s.get("score", 0), reverse=True)
     return intent, sources[:3], time_info

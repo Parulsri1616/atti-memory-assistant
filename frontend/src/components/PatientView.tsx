@@ -59,6 +59,7 @@ import {
   applyThemeToDOM
 } from '../services/theme';
 import { QueryResponse, PatientProfile, DailyRoutine, Medication, Person } from '../types';
+import { evaluateUpcomingActivity, EvaluatedActivity } from '../services/activityEvaluator';
 import { AboutMeSection } from './AboutMeSection';
 import { FloatingSOS } from './FloatingSOS';
 
@@ -170,8 +171,40 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
     description?: string;
   } | null>(null);
 
+  // Dynamic real-time upcoming activity evaluation state
+  const [evaluatedActivity, setEvaluatedActivity] = useState<EvaluatedActivity>(() =>
+    evaluateUpcomingActivity([], new Date())
+  );
+  const lastDateRef = useRef<string>(new Date().toDateString());
+  const routinesListRef = useRef<DailyRoutine[]>(routinesList);
+
+  useEffect(() => {
+    routinesListRef.current = routinesList;
+    const now = new Date();
+    const evaluated = evaluateUpcomingActivity(routinesList, now);
+    setEvaluatedActivity(evaluated);
+    if (evaluated.routine) {
+      setActiveRoutine({
+        title: evaluated.routine.title,
+        time: evaluated.routine.time,
+        category: evaluated.routine.category,
+        description: evaluated.routine.description
+      });
+    } else if (evaluated.status === 'all_completed' || evaluated.status === 'empty') {
+      setActiveRoutine(null);
+    }
+  }, [routinesList]);
+
   const displayName = patient?.call_sign || patient?.name || 'Meera';
   const patientId = patient?.id || 1;
+  const patientAddress = patient?.address || '24, Green Park, New Delhi';
+  const patientLocationCity = (() => {
+    if (patient?.address) {
+      const parts = patient.address.split(',').map((p) => p.trim()).filter(Boolean);
+      return parts[parts.length - 1] || 'New Delhi';
+    }
+    return 'New Delhi';
+  })();
 
   const [networkBaseUrl, setNetworkBaseUrl] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -212,13 +245,32 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
       period
     });
 
-    try {
-      const bannerData = await api.getCurrentBanner();
-      if (bannerData && bannerData.active_routine) {
-        setActiveRoutine(bannerData.active_routine);
+    // Handle day change across midnight -> load fresh daily schedule
+    if (now.toDateString() !== lastDateRef.current) {
+      lastDateRef.current = now.toDateString();
+      try {
+        const freshRoutines = await api.getRoutines();
+        if (freshRoutines && Array.isArray(freshRoutines)) {
+          setRoutinesList(freshRoutines);
+          routinesListRef.current = freshRoutines;
+        }
+      } catch {
+        // offline fallback
       }
-    } catch {
-      // offline fallback
+    }
+
+    // Continuously evaluate the patient's scheduled activities with real-world local time
+    const evaluated = evaluateUpcomingActivity(routinesListRef.current, now);
+    setEvaluatedActivity(evaluated);
+    if (evaluated.routine) {
+      setActiveRoutine({
+        title: evaluated.routine.title,
+        time: evaluated.routine.time,
+        category: evaluated.routine.category,
+        description: evaluated.routine.description
+      });
+    } else if (evaluated.status === 'all_completed' || evaluated.status === 'empty') {
+      setActiveRoutine(null);
     }
   };
 
@@ -915,58 +967,56 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
               </div>
             </button>
 
-            {/* Card 4: Routine / Schedule */}
+            {/* Card 4: Location */}
             <button
               onClick={() =>
                 speakCardInfo(
-                  'card-activity',
-                  activeRoutine
-                    ? `Next scheduled activity is ${activeRoutine.title} at ${activeRoutine.time}`
-                    : `You are all caught up on your routine.`
+                  'card-location',
+                  `You are currently safe at Home in ${patientLocationCity}. Your address is ${patientAddress}.`
                 )
               }
               className={`w-full min-w-0 overflow-hidden ${
                 isDark ? 'bg-slate-900/70 hover:bg-slate-850/90 text-slate-100' : 'bg-white/20 hover:bg-white/25 text-white'
               } active:scale-95 backdrop-blur-md rounded-2xl p-2.5 flex flex-col items-center justify-between text-center border shadow-sm min-h-[96px] transition-all group relative ${
-                activeSpeechId === 'card-activity' && isSpeaking && !isPaused
+                activeSpeechId === 'card-location' && isSpeaking && !isPaused
                   ? 'ring-2 ring-emerald-300 border-emerald-300 bg-white/30'
-                  : activeSpeechId === 'card-activity' && isPaused
+                  : activeSpeechId === 'card-location' && isPaused
                   ? 'ring-2 ring-amber-300 border-amber-300 bg-white/30'
                   : isDark ? 'border-slate-800/80' : 'border-white/25'
               }`}
               title={
-                activeSpeechId === 'card-activity' && isSpeaking && !isPaused
+                activeSpeechId === 'card-location' && isSpeaking && !isPaused
                   ? 'Tap to pause or stop'
-                  : activeSpeechId === 'card-activity' && isPaused
+                  : activeSpeechId === 'card-location' && isPaused
                   ? 'Tap to resume'
-                  : 'Tap to listen'
+                  : 'Tap to hear your current location'
               }
             >
               <div className={`w-9 h-9 rounded-xl ${
                 isDark ? 'bg-slate-800 border-slate-700 text-indigo-300' : 'bg-gradient-to-br from-white/35 to-white/10 border-white/30 text-white'
               } flex items-center justify-center shadow-inner border group-hover:scale-105 transition-transform shrink-0`}>
-                {activeSpeechId === 'card-activity' && isSpeaking && !isPaused ? (
+                {activeSpeechId === 'card-location' && isSpeaking && !isPaused ? (
                   <Pause className="w-5 h-5 text-emerald-200 fill-current animate-pulse" />
-                ) : activeSpeechId === 'card-activity' && isPaused ? (
+                ) : activeSpeechId === 'card-location' && isPaused ? (
                   <Play className="w-5 h-5 text-amber-200 fill-current animate-pulse" />
                 ) : (
-                  <Activity className="w-5 h-5 drop-shadow-xs" />
+                  <MapPin className="w-5 h-5 drop-shadow-xs" />
                 )}
               </div>
               <div className="mt-1 w-full min-w-0 overflow-hidden flex flex-col items-center">
                 <span className="text-[12px] font-bold leading-tight truncate w-full block">
-                  {activeSpeechId === 'card-activity' && isSpeaking && !isPaused
+                  {activeSpeechId === 'card-location' && isSpeaking && !isPaused
                     ? 'Stop'
-                    : activeSpeechId === 'card-activity' && isPaused
+                    : activeSpeechId === 'card-location' && isPaused
                     ? 'Resume'
-                    : activeRoutine ? activeRoutine.time : 'All Set'}
+                    : 'Home'}
                 </span>
                 <span className={`text-[10px] font-medium leading-tight truncate w-full block mt-0.5 ${
                   isDark ? 'text-slate-400' : 'text-indigo-100/90'
                 }`}>
-                  {activeSpeechId === 'card-activity' && (isSpeaking || isPaused)
+                  {activeSpeechId === 'card-location' && (isSpeaking || isPaused)
                     ? 'Tap to toggle'
-                    : activeRoutine ? (activeRoutine.category ? (activeRoutine.category.charAt(0).toUpperCase() + activeRoutine.category.slice(1)) : 'Activity') : 'Routine'}
+                    : patientLocationCity}
                 </span>
               </div>
             </button>
@@ -978,17 +1028,11 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
               role="button"
               tabIndex={0}
               onClick={() => {
-                const reminderText = activeRoutine
-                  ? `Scheduled reminder: ${activeRoutine.title} at ${activeRoutine.time}. ${activeRoutine.description || ''}`
-                  : `Next reminder: Evening Tea & Memory Games at 5:00 PM with your family.`;
-                speakCardInfo('card-reminder', reminderText);
+                speakCardInfo('card-reminder', evaluatedActivity.spokenText);
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
-                  const reminderText = activeRoutine
-                    ? `Scheduled reminder: ${activeRoutine.title} at ${activeRoutine.time}. ${activeRoutine.description || ''}`
-                    : `Next reminder: Evening Tea & Memory Games at 5:00 PM with your family.`;
-                  speakCardInfo('card-reminder', reminderText);
+                  speakCardInfo('card-reminder', evaluatedActivity.spokenText);
                 }
               }}
               style={{
@@ -1008,21 +1052,37 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
                 </div>
                 <div>
                   <div className="text-sm sm:text-base font-extrabold tracking-tight text-white leading-tight">
-                    {activeRoutine ? activeRoutine.title : 'Evening Tea & Memory Games'}
+                    {evaluatedActivity.title}
                   </div>
                   <div className="text-xs font-medium text-indigo-200/95 mt-1 flex items-center gap-1.5">
-                    <span>{activeRoutine ? `At ${activeRoutine.time}` : 'At 17:00'}</span>
-                    <span>•</span>
-                    <span className="text-amber-200 font-semibold">Today</span>
+                    {evaluatedActivity.status === 'all_completed' || evaluatedActivity.status === 'empty' ? (
+                      <span className="text-emerald-300 font-semibold">{evaluatedActivity.subtitleText}</span>
+                    ) : evaluatedActivity.status === 'starting' ? (
+                      <>
+                        <span>At {evaluatedActivity.timeText}</span>
+                        <span>•</span>
+                        <span className="text-emerald-300 font-semibold animate-pulse">Starting now</span>
+                      </>
+                    ) : evaluatedActivity.status === 'in_progress' ? (
+                      <>
+                        <span>At {evaluatedActivity.timeText}</span>
+                        <span>•</span>
+                        <span className="text-emerald-300 font-semibold">In progress</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>At {evaluatedActivity.timeText}</span>
+                        <span>•</span>
+                        <span className="text-amber-200 font-semibold">{evaluatedActivity.countdownText}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0 mt-1">
                 {renderSpeakerControl(
                   'card-reminder',
-                  activeRoutine
-                    ? `Scheduled reminder: ${activeRoutine.title} at ${activeRoutine.time}. ${activeRoutine.description || ''}`
-                    : `Next reminder: Evening Tea & Memory Games at 5:00 PM with your family.`,
+                  evaluatedActivity.spokenText,
                   'dark'
                 )}
                 <div className="w-8 h-8 rounded-full bg-white/10 group-hover:bg-white/20 flex items-center justify-center text-white shrink-0 transition-colors">
@@ -1680,7 +1740,19 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
                 const isThisActive = activeSpeechId === personId;
                 const isThisSpeaking = isThisActive && isSpeaking && !isPaused;
                 const isThisPaused = isThisActive && isPaused;
-                const personSpeechText = `${person.name} is your ${person.relationship}. ${person.notes || ''} ${person.visit_schedule ? `Visit schedule: ${person.visit_schedule}.` : ''}`;
+
+                const isDeceased =
+                  /^late\s/i.test(person.name.trim()) ||
+                  /deceased/i.test(person.relationship || '') ||
+                  /deceased|late husband|late wife|passed away/i.test(person.notes || '') ||
+                  /loving memory/i.test(person.phone || '');
+
+                const cleanDigits = (person.phone || '').replace(/\D/g, '');
+                const hasCallablePhone = !isDeceased && cleanDigits.length >= 7;
+
+                const personSpeechText = isDeceased
+                  ? `${person.name} is your ${person.relationship}. ${person.notes || ''} In loving memory.`
+                  : `${person.name} is your ${person.relationship}. ${person.notes || ''} ${person.visit_schedule ? `Visit schedule: ${person.visit_schedule}.` : ''}`;
 
                 let personBorderClasses = isDark
                   ? 'bg-slate-800/80 border-slate-700/80 hover:border-indigo-500'
@@ -1755,8 +1827,15 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
                       </div>
                     )}
 
-                    {/* Quick Call Action if Phone Available */}
-                    {person.phone && (
+                    {/* Quick Call Action or Memorial Tribute */}
+                    {isDeceased ? (
+                      <div className={`pt-2 border-t ${isDark ? 'border-slate-700/60' : 'border-slate-200/60'} flex items-center justify-between`}>
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-400">
+                          <Heart className="w-3.5 h-3.5 fill-rose-400/20 text-rose-400" />
+                          <span>In Loving Memory</span>
+                        </div>
+                      </div>
+                    ) : hasCallablePhone && person.phone ? (
                       <div className={`pt-2 border-t ${isDark ? 'border-slate-700/60' : 'border-slate-200/60'} flex items-center justify-between`}>
                         <span className={`text-xs font-mono ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{person.phone}</span>
                         <a
@@ -1767,7 +1846,7 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
                           <span>Call {person.name}</span>
                         </a>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 );
               })

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Sparkles,
   User,
   Heart,
   ChevronRight,
@@ -13,14 +12,80 @@ import {
   PlayCircle,
   AlertCircle
 } from 'lucide-react';
+import attiLogo from '../assets/atti-care-logo.png';
 import { api } from '../services/api';
 import { PatientProfile } from '../types';
+import { useLanguage, LanguageToggle } from '../services/language';
+
+// Custom vector icons crafted in the expressive line-art aesthetic of the ATTI family logo
+export const PatientVectorIcon: React.FC<{ className?: string }> = ({ className = "w-7 h-7" }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    {/* Hair bun on side */}
+    <circle cx="5" cy="11.5" r="2.2" strokeWidth="1.8" />
+    {/* Hair wave over forehead */}
+    <path d="M 6.5 10.5 C 7.5 6.5 11 5.5 14 6 C 17 6.5 19 8.5 18.5 12" strokeWidth="1.8" />
+    {/* Face contour */}
+    <path d="M 7.5 11 C 7.5 15.5 9.5 18.5 12.5 18.5 C 15.5 18.5 17.5 15.5 17.5 11" strokeWidth="1.8" />
+    {/* Spectacles / Round Glasses */}
+    <circle cx="9.8" cy="12" r="2.2" strokeWidth="1.8" />
+    <circle cx="15.2" cy="12" r="2.2" strokeWidth="1.8" />
+    <line x1="12" y1="12" x2="13" y2="12" strokeWidth="1.8" />
+    {/* Bindi */}
+    <circle cx="12.5" cy="8.2" r="0.75" fill="currentColor" stroke="none" />
+    {/* Kind Smile */}
+    <path d="M 11 15.8 Q 12.5 17.4 14 15.8" strokeWidth="1.8" />
+    {/* Saree / Shoulders */}
+    <path d="M 5.5 21.5 C 7 19.5 9.5 19 12.5 19 C 15.5 19 18 19.5 19.5 21.5" strokeWidth="1.8" />
+    <path d="M 8.5 21.5 L 13.5 19" strokeWidth="1.8" />
+  </svg>
+);
+
+export const FamilyMemberVectorIcon: React.FC<{ className?: string }> = ({ className = "w-7 h-7" }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    {/* Wavy hair volume */}
+    <path d="M 6.5 13.5 C 5 11 5.5 7.5 8 5.5 C 10.5 3.8 14.5 4 17 5.5 C 19.5 7.5 20 11 18.5 13.5" strokeWidth="1.8" />
+    <path d="M 5.5 13 C 4.5 14.5 5 17 6.5 17.5" strokeWidth="1.8" />
+    {/* Face contour */}
+    <path d="M 7.8 10.5 C 7.8 15 9.8 18 12.5 18 C 15.2 18 17.2 15 17.2 10.5" strokeWidth="1.8" />
+    {/* Drop Earring */}
+    <circle cx="6.5" cy="14" r="1.3" strokeWidth="1.5" />
+    {/* Bindi */}
+    <circle cx="12.5" cy="8" r="0.75" fill="currentColor" stroke="none" />
+    {/* Gentle Eyes */}
+    <path d="M 9.5 11 Q 10.5 10.2 11.5 11" strokeWidth="1.6" />
+    <path d="M 13.5 11 Q 14.5 10.2 15.5 11" strokeWidth="1.6" />
+    {/* Warm Smile */}
+    <path d="M 10.5 14.2 Q 12.5 16.2 14.5 14.2" strokeWidth="1.8" />
+    {/* Saree / Shoulders */}
+    <path d="M 5.5 21.5 C 7 19.2 9.5 18.8 12.5 18.8 C 15.5 18.8 18 19.2 19.5 21.5" strokeWidth="1.8" />
+    <path d="M 9 21.5 L 14 18.8" strokeWidth="1.8" />
+  </svg>
+);
 
 interface WelcomeViewProps {
   onAuthenticated: (patient: PatientProfile) => void;
 }
 
 export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => {
+  const { t, language } = useLanguage();
   const [selectedRole, setSelectedRole] = useState<'patient' | 'family' | null>('patient');
   const [patientAuthMode, setPatientAuthMode] = useState<'signin' | 'signup'>('signin');
 
@@ -48,6 +113,10 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
     setLoadingRole(role);
     setErrorMessage(null);
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('atti_is_demo', 'true');
+        sessionStorage.setItem('atti_is_demo', 'true');
+      }
       const res = await api.demoLogin(role);
       onAuthenticated(res.patient);
     } catch (err: any) {
@@ -132,60 +201,57 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
   };
 
   return (
-    <div className="w-full min-h-screen bg-gradient-to-b from-sky-50/80 via-slate-50 to-white text-slate-800 flex flex-col items-center justify-start p-4 sm:p-6 md:p-8">
+    <div className="w-full min-h-screen bg-white text-slate-800 flex flex-col items-center justify-start p-4 sm:p-6 md:p-8">
       {/* Top Header / App Shell */}
-      <div className="w-full max-w-md flex items-center justify-between mb-2">
+      <div className="w-full max-w-md flex items-center justify-between gap-2 mb-2">
         {selectedRole === 'family' ? (
           <button
             onClick={() => setSelectedRole('patient')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-slate-700 hover:text-slate-900 shadow-xs border border-slate-200 text-sm font-semibold transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-xs text-xs sm:text-sm font-semibold transition-all active:scale-95 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Role Selection</span>
+            <span>{t('welcome.role_selection')}</span>
           </button>
         ) : (
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-500 animate-pulse" />
-            <span className="text-sm font-extrabold tracking-tight text-sky-950 uppercase">
-              ATTI Care
-            </span>
-          </div>
+          <div />
         )}
-        <span className="text-xs font-semibold px-2.5 py-1 bg-sky-100 text-sky-800 rounded-full border border-sky-200">
-          Dementia Companion
-        </span>
+        <LanguageToggle />
       </div>
 
       {/* Main Container */}
       <div className="w-full max-w-md flex flex-col items-center">
-        {/* Soft Glowing Circular Badge */}
-        <div className="relative my-4">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-sky-500/25 ring-8 ring-sky-100">
-            <Sparkles className="w-10 h-10 animate-calm-pulse" />
+        {/* ATTI Family Hero Logo Badge */}
+        <div className="relative my-4 group">
+          <div className="w-24 h-24 rounded-3xl bg-[#002aff] flex items-center justify-center shadow-xl shadow-blue-600/20 ring-4 ring-blue-50 overflow-hidden transition-transform duration-300 hover:scale-105">
+            <img
+              src={attiLogo}
+              alt="ATTI Family Care Logo"
+              className="w-full h-full object-cover select-none"
+            />
           </div>
         </div>
 
-        {/* Welcome Headings (Inspired by Sahayika reference) */}
+        {/* Welcome Headings */}
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight text-center">
-          Welcome to ATTI
+          {t('welcome.title')}
         </h1>
-        <p className="text-sm font-medium text-slate-500 text-center mt-1">
-          डिमेंशिया मेमोरी और दैनिक दिनचर्या साथी
+        {language === 'hi' && (
+          <p className="text-sm font-medium text-slate-600 text-center mt-1">
+            {t('welcome.tagline')}
+          </p>
+        )}
+        <p className="text-xs text-slate-400 text-center mb-6 mt-1">
+          {t('welcome.subtitle')}
         </p>
-        <p className="text-xs text-slate-400 text-center mb-6">
-          A gentle, voice-guided assistant for loved ones with memory decline
-        </p>
-
-
 
         {/* --- TWO DISTINCT DEMO LOGIN OPTIONS (PATIENT & FAMILY MEMBER) --- */}
         <div className="w-full flex flex-col gap-2.5 mb-5">
           <div>
             <div className="text-sm font-bold text-slate-900">
-              Demo Access Options · डेमो लॉगिन
+              {t('welcome.demo_options_title')}
             </div>
             <div className="text-xs text-slate-400">
-              Select an account to explore ATTI with comprehensive dummy data
+              {t('welcome.demo_options_subtitle')}
             </div>
           </div>
 
@@ -196,27 +262,24 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
               type="button"
               onClick={() => handleDemoLogin('patient')}
               disabled={isLoading}
-              className="w-full p-4 rounded-2xl text-left flex items-center justify-between transition-all border bg-white border-sky-500 hover:border-sky-600 hover:shadow-md ring-2 ring-sky-100 active:scale-98 cursor-pointer shadow-xs group"
+              className="w-full p-4 rounded-2xl text-left flex items-center justify-between transition-all bg-slate-50 hover:bg-slate-100/90 active:scale-[0.99] cursor-pointer shadow-xs group"
             >
               <div className="flex items-center gap-3.5 min-w-0">
-                <div className="w-12 h-12 rounded-2xl bg-sky-50 group-hover:bg-sky-100 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200/60 transition-colors">
-                  <User className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-sky-500/25 group-hover:scale-105 transition-all">
+                  <PatientVectorIcon className="w-7 h-7 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <span>Continue as Demo Patient</span>
-                    <span className="text-xs px-2 py-0.5 bg-sky-100 text-sky-800 rounded-full font-semibold">
-                      मरीज़
-                    </span>
+                  <div className="text-base font-bold text-slate-900">
+                    {t('welcome.demo_patient_title')}
                   </div>
                   <div className="text-xs text-slate-500 truncate mt-0.5">
                     {loadingRole === 'patient'
-                      ? 'Authenticating Meera Sharma...'
-                      : 'Meera Sharma (72 yrs) • Voice assistant & daily routines'}
+                      ? t('welcome.demo_patient_authenticating')
+                      : t('welcome.demo_patient_desc')}
                   </div>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-sky-600 group-hover:translate-x-1 transition-all shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all shrink-0" />
             </button>
 
             {/* Demo Option 2: Continue as Demo Family Member */}
@@ -225,27 +288,24 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
               type="button"
               onClick={() => handleDemoLogin('family')}
               disabled={isLoading}
-              className="w-full p-4 rounded-2xl text-left flex items-center justify-between transition-all border bg-white border-rose-400 hover:border-rose-500 hover:shadow-md ring-2 ring-rose-100 active:scale-98 cursor-pointer shadow-xs group"
+              className="w-full p-4 rounded-2xl text-left flex items-center justify-between transition-all bg-slate-50 hover:bg-slate-100/90 active:scale-[0.99] cursor-pointer shadow-xs group"
             >
               <div className="flex items-center gap-3.5 min-w-0">
-                <div className="w-12 h-12 rounded-2xl bg-rose-50 group-hover:bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200/60 transition-colors">
-                  <Heart className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-500/25 group-hover:scale-105 transition-all">
+                  <FamilyMemberVectorIcon className="w-7 h-7 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <span>Continue as Demo Family Member</span>
-                    <span className="text-xs px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full font-semibold">
-                      परिवार
-                    </span>
+                  <div className="text-base font-bold text-slate-900">
+                    {t('welcome.demo_family_title')}
                   </div>
                   <div className="text-xs text-slate-500 truncate mt-0.5">
                     {loadingRole === 'family'
-                      ? 'Authenticating Ananya Sharma...'
-                      : 'Ananya Sharma (Daughter) • Caregiver portal & monitoring'}
+                      ? t('welcome.demo_family_authenticating')
+                      : t('welcome.demo_family_desc')}
                   </div>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-rose-600 group-hover:translate-x-1 transition-all shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all shrink-0" />
             </button>
           </div>
         </div>
@@ -259,40 +319,40 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
             </div>
 
             <span className="text-xs font-bold uppercase tracking-wider text-rose-600 bg-rose-50 px-3 py-0.5 rounded-full border border-rose-200 mb-2">
-              Caregiver & Family Portal
+              {t('welcome.portal_badge')}
             </span>
 
             <h2 className="text-lg font-bold text-slate-900 mb-0.5">
-              Family Member Portal
+              {t('welcome.portal_title')}
             </h2>
             <p className="text-xs font-semibold text-slate-500 mb-3">
-              परिवार और देखभालकर्ता पोर्टल
+              {t('welcome.portal_subtitle')}
             </p>
 
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-4">
-              Caregivers and family members can view associated patient profiles, update daily routines and medications, configure emergency contacts, and monitor voice assistant interactions.
+              {t('welcome.portal_desc')}
             </p>
 
             {/* Upcoming Features Checklist */}
             <div className="w-full bg-slate-50 rounded-2xl p-3.5 text-left border border-slate-200/70 mb-4 flex flex-col gap-2">
               <div className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">
-                Active Portal Capabilities
+                {t('welcome.capabilities_title')}
               </div>
               <div className="flex items-center gap-2 text-xs font-medium text-slate-700">
                 <Shield className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                <span>Guardian Profile & Emergency QR Code</span>
+                <span>{t('welcome.cap_emergency_qr')}</span>
               </div>
               <div className="flex items-center gap-2 text-xs font-medium text-slate-700">
                 <Clock className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                <span>Daily Reminders & Medication Scheduling</span>
+                <span>{t('welcome.cap_reminders')}</span>
               </div>
               <div className="flex items-center gap-2 text-xs font-medium text-slate-700">
                 <UserCheck className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                <span>People I Know & Familiar Contacts</span>
+                <span>{t('welcome.cap_people')}</span>
               </div>
               <div className="flex items-center gap-2 text-xs font-medium text-slate-700">
                 <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                <span>Interaction History & Memory Analytics</span>
+                <span>{t('welcome.cap_analytics')}</span>
               </div>
             </div>
 
@@ -304,7 +364,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
               className="w-full mb-2.5 py-3 bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-700 hover:to-indigo-700 active:scale-95 text-white font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-xs sm:text-sm cursor-pointer"
             >
               <PlayCircle className="w-4 h-4 text-rose-200" />
-              <span>{loadingRole === 'family' ? 'Authenticating Family Member...' : 'Continue as Demo Family Member'}</span>
+              <span>{loadingRole === 'family' ? t('welcome.demo_family_authenticating') : t('welcome.demo_family_title')}</span>
             </button>
 
             <button
@@ -313,7 +373,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
               className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-bold rounded-2xl transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Return to Patient View</span>
+              <span>{t('welcome.return_patient_view')}</span>
             </button>
           </div>
         ) : (
@@ -332,17 +392,17 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
               <>
                 <div>
                   <h2 className="text-base font-bold text-slate-900">
-                    Sign in with email
+                    {t('welcome.signin_title')}
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    ईमेल और पासवर्ड से साइन इन करें
+                    {t('welcome.signin_subtitle')}
                   </p>
                 </div>
 
                 <form onSubmit={handleSignIn} className="flex flex-col gap-3.5">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Email address · ईमेल पता
+                      {t('welcome.email_label')}
                     </label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -350,7 +410,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                         type="text"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="name@example.com or demo@atti.care"
+                        placeholder={t('welcome.email_placeholder')}
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all"
                         required
                       />
@@ -359,7 +419,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Password · पासवर्ड
+                      {t('welcome.password_label')}
                     </label>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -367,7 +427,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
+                        placeholder={t('welcome.password_placeholder')}
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all"
                         required
                       />
@@ -377,25 +437,25 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full mt-1 py-3 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-sm disabled:bg-slate-400"
+                    className="w-full mt-1 py-3 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-sm disabled:bg-slate-400 cursor-pointer"
                   >
-                    <span>{isLoading ? 'Signing In...' : 'Sign In as Patient'}</span>
+                    <span>{isLoading ? t('welcome.signin_loading') : t('welcome.signin_btn')}</span>
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </form>
 
                 {/* Under submit button: Don't have an account? Sign Up */}
                 <div className="text-center text-xs text-slate-500 mt-1">
-                  Don't have an account?{' '}
+                  {t('welcome.no_account')}{' '}
                   <button
                     type="button"
                     onClick={() => {
                       setPatientAuthMode('signup');
                       resetFields();
                     }}
-                    className="font-bold text-sky-600 hover:text-sky-700 hover:underline transition-all"
+                    className="font-bold text-sky-600 hover:text-sky-700 hover:underline transition-all cursor-pointer"
                   >
-                    Sign Up · नया खाता बनाएं
+                    {t('welcome.signup_link')}
                   </button>
                 </div>
               </>
@@ -404,17 +464,17 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
               <>
                 <div>
                   <h2 className="text-base font-bold text-slate-900">
-                    Create Patient Account
+                    {t('welcome.signup_title')}
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    नया मरीज़ खाता बनाएं
+                    {t('welcome.signup_subtitle')}
                   </p>
                 </div>
 
                 <form onSubmit={handleSignUp} className="flex flex-col gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Full Name · पूरा नाम
+                      {t('welcome.fullname_label')}
                     </label>
                     <div className="relative">
                       <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -422,7 +482,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                         type="text"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        placeholder="e.g. Ramesh Verma"
+                        placeholder={t('welcome.fullname_placeholder')}
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all"
                         required
                       />
@@ -432,25 +492,25 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Call Sign · पुकारने का नाम
+                        {t('welcome.callsign_label')}
                       </label>
                       <input
                         type="text"
                         value={callSign}
                         onChange={(e) => setCallSign(e.target.value)}
-                        placeholder="e.g. Meera / Dadi"
+                        placeholder={t('welcome.callsign_placeholder')}
                         className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Caregiver Name · परिजन
+                        {t('welcome.caregiver_label')}
                       </label>
                       <input
                         type="text"
                         value={caregiverName}
                         onChange={(e) => setCaregiverName(e.target.value)}
-                        placeholder="e.g. Ananya Sharma"
+                        placeholder={t('welcome.caregiver_placeholder')}
                         className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                       />
                     </div>
@@ -458,7 +518,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Email address · ईमेल पता
+                      {t('welcome.email_label')}
                     </label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -476,7 +536,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Password · पासवर्ड
+                      {t('welcome.password_label')}
                     </label>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -494,7 +554,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Confirm Password · पासवर्ड की पुष्टि करें
+                      {t('welcome.confirm_password_label')}
                     </label>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -502,7 +562,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                         type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter password to confirm"
+                        placeholder={t('welcome.confirm_password_placeholder')}
                         disabled={isLoading}
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all disabled:bg-slate-100"
                         required
@@ -513,25 +573,25 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full mt-1 py-3 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-sm disabled:bg-slate-400"
+                    className="w-full mt-1 py-3 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-sm disabled:bg-slate-400 cursor-pointer"
                   >
-                    <span>{isLoading ? 'Creating Account...' : 'Create Account & Enter'}</span>
+                    <span>{isLoading ? t('welcome.signup_loading') : t('welcome.signup_btn')}</span>
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </form>
 
                 {/* Under submit button: Already have an account? Sign In */}
                 <div className="text-center text-xs text-slate-500 mt-1">
-                  Already have an account?{' '}
+                  {t('welcome.have_account')}{' '}
                   <button
                     type="button"
                     onClick={() => {
                       setPatientAuthMode('signin');
                       resetFields();
                     }}
-                    className="font-bold text-sky-600 hover:text-sky-700 hover:underline transition-all"
+                    className="font-bold text-sky-600 hover:text-sky-700 hover:underline transition-all cursor-pointer"
                   >
-                    Sign In · साइन इन करें
+                    {t('welcome.signin_link')}
                   </button>
                 </div>
               </>

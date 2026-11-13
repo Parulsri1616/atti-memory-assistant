@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import engine, Base, SessionLocal, init_db_and_migrate
 from .seed_data import seed_database_if_empty
-from .routers import assistant, memories, routines, logs, auth
+from .routers import assistant, memories, routines, logs, auth, guardian
 
 # Initialize database tables and run safe column migrations
 init_db_and_migrate()
@@ -33,6 +33,7 @@ app.include_router(assistant.router, prefix=settings.API_PREFIX)
 app.include_router(memories.router, prefix=settings.API_PREFIX)
 app.include_router(routines.router, prefix=settings.API_PREFIX)
 app.include_router(logs.router, prefix=settings.API_PREFIX)
+app.include_router(guardian.router, prefix=settings.API_PREFIX)
 
 @app.get("/")
 def root():
