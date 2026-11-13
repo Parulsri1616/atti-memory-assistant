@@ -226,5 +226,12 @@ console.log('DECODED_OK:' + code.data);
         self.assertEqual(proc.returncode, 0, f"QR decoding test failed: {proc.stderr}")
         self.assertIn(f"DECODED_OK:{qr_target_url}", proc.stdout)
 
+    def test_assistant_tts_endpoint(self):
+        """Verify that GET /api/assistant/tts generates audio without error."""
+        res = requests.get(f"{BASE_URL}/assistant/tts?text=Hello%20Meera")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.headers.get("content-type"), "audio/wav")
+        self.assertGreater(len(res.content), 1000)
+
 if __name__ == "__main__":
     unittest.main()

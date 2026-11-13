@@ -103,3 +103,42 @@ def get_system_status():
         "lan_ip": lan_ip,
         "network_app_url": network_app_url
     }
+
+import hashlib
+import shutil
+import subprocess
+from pathlib import Path
+from fastapi.responses import Response
+
+@router.get("/tts")
+def text_to_speech(text: str):
+    if not text or not text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+    
+    clean_text = text.strip()[:600]
+    cache_dir = Path("/tmp/atti_tts_cache")
+    cache_dir.mkdir(exist_ok=True)
+    hash_id = hashlib.md5(clean_text.encode("utf-8")).hexdigest()
+    wav_path = cache_dir / f"{hash_id}.wav"
+    
+    if not wav_path.exists():
+        if shutil.which("say") and shutil.which("afconvert"):
+            aiff_path = cache_dir / f"{hash_id}.aiff"
+            try:
+                # Calm, slightly slower speech tempo for dementia comprehension
+                subprocess.run(["say", "-v", "Samantha", "-r", "175", "-o", str(aiff_path), clean_text], check=True, timeout=5)
+                subprocess.run(["afconvert", "-f", "WAVE", "-d", "LEI16", str(aiff_path), str(wav_path)], check=True, timeout=5)
+            except Exception as e:
+                print("TTS generation error:", e)
+            finally:
+                if aiff_path.exists():
+                    try:
+                        aiff_path.unlink()
+                    except Exception:
+                        pass
+
+    if wav_path.exists():
+        with open(wav_path, "rb") as f:
+            return Response(content=f.read(), media_type="audio/wav")
+
+    raise HTTPException(status_code=500, detail="TTS generation failed")
