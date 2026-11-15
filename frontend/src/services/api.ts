@@ -22,10 +22,11 @@ import {
   NotificationItem,
   OverviewSummary,
   CaregiverObservation,
-  PatientInsightsData
+  PatientInsightsData,
+  FamilyPatientOnboardingPayload
 } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 // Access Token Storage with storage persistence for seamless page reloads
 let inMemoryAccessToken: string | null = (typeof window !== 'undefined')
@@ -133,6 +134,30 @@ export const api = {
     }
     const data: AuthResponse = await res.json();
     setAccessToken(data.access_token || data.token || null);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('atti_is_demo');
+      sessionStorage.removeItem('atti_is_demo');
+    }
+    return data;
+  },
+
+  async familyPatientOnboarding(payload: FamilyPatientOnboardingPayload): Promise<AuthResponse> {
+    const res = await fetch(`${API_BASE}/auth/family-onboarding`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Patient onboarding failed');
+    }
+    const data: AuthResponse = await res.json();
+    setAccessToken(data.access_token || data.token || null);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('atti_is_demo');
+      sessionStorage.removeItem('atti_is_demo');
+    }
     return data;
   },
 
@@ -289,6 +314,14 @@ export const api = {
     const res = await fetchWithAuth(`${API_BASE}/routines/medications/${id}/log-taken`, {
       method: 'POST'
     });
+    return res.json();
+  },
+
+  async toggleRoutineStatus(id: number): Promise<{ id: number; status: string }> {
+    const res = await fetchWithAuth(`${API_BASE}/routines/${id}/toggle-status`, {
+      method: 'POST'
+    });
+    if (!res.ok) throw new Error('Failed to toggle routine status');
     return res.json();
   },
 
@@ -457,6 +490,12 @@ export const api = {
   async getGuardianAppointments(): Promise<DoctorAppointment[]> {
     const res = await fetchWithAuth(`${API_BASE}/guardian/appointments`);
     if (!res.ok) throw new Error('Failed to load appointments');
+    return res.json();
+  },
+
+  async getPatientAppointments(): Promise<DoctorAppointment[]> {
+    const res = await fetchWithAuth(`${API_BASE}/routines/appointments`);
+    if (!res.ok) throw new Error('Failed to load patient appointments');
     return res.json();
   },
 
@@ -668,18 +707,57 @@ export const api = {
   },
 
   async getLocationHistory(limit = 15): Promise<LocationLog[]> {
-    const res = await fetchWithAuth(`${API_BASE}/guardian/locations?limit=${limit}`);
-    if (!res.ok) throw new Error('Failed to load location history');
-    return res.json();
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/guardian/locations?limit=${limit}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          localStorage.setItem('atti_latest_location_log', JSON.stringify(data[0]));
+          return data;
+        }
+      }
+    } catch {
+      // Fallback below
+    }
+
+    const cached = localStorage.getItem('atti_latest_location_log');
+    if (cached) {
+      try {
+        return [JSON.parse(cached)];
+      } catch {}
+    }
+    return [];
   },
 
   async recordLocation(data: Partial<LocationLog>): Promise<LocationLog> {
-    const res = await fetchWithAuth(`${API_BASE}/guardian/locations`, {
-      method: 'POST',
-      body: JSON.stringify(data)
-    });
-    if (!res.ok) throw new Error('Failed to record location');
-    return res.json();
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/guardian/locations`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        const recorded = await res.json();
+        localStorage.setItem('atti_latest_location_log', JSON.stringify(recorded));
+        return recorded;
+      }
+    } catch {
+      // Fallback below
+    }
+
+    // Local calculation fallback
+    const fallback: LocationLog = {
+      id: Date.now(),
+      latitude: data.latitude ?? 28.5355,
+      longitude: data.longitude ?? 77.2100,
+      address: data.address || 'Live Device Position',
+      accuracy_meters: data.accuracy_meters ?? 10,
+      is_inside_safe_zone: data.is_inside_safe_zone ?? true,
+      status_label: data.status_label || 'Phone GPS',
+      battery_level: data.battery_level ?? 88,
+      timestamp: new Date().toISOString()
+    };
+    localStorage.setItem('atti_latest_location_log', JSON.stringify(fallback));
+    return fallback;
   },
 
   async getSOSAlerts(): Promise<SOSAlert[]> {

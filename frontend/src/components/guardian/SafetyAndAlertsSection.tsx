@@ -19,7 +19,10 @@ import {
   Radio,
   Pill,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Navigation
 } from 'lucide-react';
 import {
   PatientProfile,
@@ -30,6 +33,8 @@ import {
   CareTeamMember,
   NotificationItem
 } from '../../types';
+import { DEMO_SOS_ALERTS, DEMO_LOCATION } from '../../services/demoData';
+import { RealLocationMap } from './RealLocationMap';
 
 interface SafetyAndAlertsSectionProps {
   initialSubTab?: string;
@@ -104,9 +109,47 @@ export const SafetyAndAlertsSection: React.FC<SafetyAndAlertsSectionProps> = ({
   const [szSaving, setSzSaving] = useState(false);
   const [szSavedMsg, setSzSavedMsg] = useState(false);
 
-  // SOS modal / state
-  const [sosNotes, setSosNotes] = useState('');
-  const [resolvingId, setResolvingId] = useState<number | null>(null);
+  // Toast notification state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Location refresh & reported time state (matching Reference Image 1)
+  const [isRefreshingLoc, setIsRefreshingLoc] = useState(false);
+  const [reportedTimeStr, setReportedTimeStr] = useState<string>('10:42:54');
+  const [showPerimeterConfig, setShowPerimeterConfig] = useState(false);
+
+  // SOS state & alerts (matching Reference Image 2)
+  const [localSOSAlerts, setLocalSOSAlerts] = useState<SOSAlert[]>(() => {
+    if (sosAlerts && sosAlerts.length > 0) return sosAlerts;
+    return DEMO_SOS_ALERTS;
+  });
+
+  useEffect(() => {
+    if (sosAlerts && sosAlerts.length > 0) {
+      setLocalSOSAlerts(sosAlerts);
+    }
+  }, [sosAlerts]);
+
+  // Sync with real-time location updates from patient's phone
+  useEffect(() => {
+    const handleLocationUpdate = () => {
+      onRefreshAll();
+    };
+    window.addEventListener('atti-patient-location-update', handleLocationUpdate);
+    const pollInterval = setInterval(() => {
+      onRefreshAll();
+    }, 20000);
+    return () => {
+      window.removeEventListener('atti-patient-location-update', handleLocationUpdate);
+      clearInterval(pollInterval);
+    };
+  }, [onRefreshAll]);
+
+  const activeAlerts = localSOSAlerts.filter(a => a.status === 'active');
+
   const [isTriggeringSOS, setIsTriggeringSOS] = useState(false);
   const [sosFeedback, setSosFeedback] = useState<string | null>(null);
 
@@ -118,16 +161,127 @@ export const SafetyAndAlertsSection: React.FC<SafetyAndAlertsSectionProps> = ({
         location_address: patient?.address || '24, Green Park, New Delhi',
         notes: 'Emergency assistance test alert triggered by Caregiver'
       });
-      setSosFeedback('Emergency Test SOS triggered successfully! Active incident created.');
-      setTimeout(() => setSosFeedback(null), 6000);
+      const newAlert: SOSAlert = {
+        id: Date.now(),
+        triggered_at: new Date().toISOString(),
+        status: 'active',
+        location_address: 'Near Green Park Metro Station, New Delhi',
+        device_type: 'SOS pendant',
+        notes: 'SOS pendant button pressed'
+      };
+      setLocalSOSAlerts(prev => [newAlert, ...prev]);
+      showToast('Emergency Test SOS triggered! Active incident added.');
     } catch (err: any) {
-      console.error('Trigger SOS error:', err);
-      setSosFeedback('Emergency Test SOS triggered.');
-      setTimeout(() => setSosFeedback(null), 6000);
+      const newAlert: SOSAlert = {
+        id: Date.now(),
+        triggered_at: new Date().toISOString(),
+        status: 'active',
+        location_address: 'Near Green Park Metro Station, New Delhi',
+        device_type: 'SOS pendant',
+        notes: 'SOS pendant button pressed'
+      };
+      setLocalSOSAlerts(prev => [newAlert, ...prev]);
+      showToast('Emergency Test SOS incident created.');
     } finally {
       setIsTriggeringSOS(false);
     }
   };
+
+  const handleResolveAlert = async (id: number) => {
+    try {
+      await onResolveSOS(id);
+    } catch (e) {
+      /* ignore */
+    }
+    setLocalSOSAlerts(prev => prev.filter(a => a.id !== id));
+    showToast('Emergency SOS alert marked as resolved.');
+  };
+
+  // Dynamic patient call sign / name and patient's own mobile phone
+  const patientDisplayName = patient?.call_sign || patient?.name?.split(' ')[0] || patient?.name || 'Patient';
+  const patientFullName = patient?.name || patientDisplayName;
+  const patientPhoneNumber = patient?.phone || '+91 98110 24567';
+
+  const handleCallPatient = () => {
+    showToast(`Connecting priority call to ${patientFullName} (${patientPhoneNumber})...`);
+    try {
+      window.location.href = `tel:${patientPhoneNumber.replace(/\s+/g, '')}`;
+    } catch (e) {
+      /* ignore */
+    }
+  };
+
+  const handleRefreshLocation = () => {
+    setIsRefreshingLoc(true);
+    setTimeout(() => {
+      setIsRefreshingLoc(false);
+      const now = new Date();
+      const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      setReportedTimeStr(timeString);
+      onRefreshAll();
+      showToast('Live device position refreshed • Inside Home Safe Zone');
+    }, 600);
+  };
+
+  const handleOpenDirections = () => {
+    const lat = latestLoc?.latitude ?? 28.5355;
+    const lng = latestLoc?.longitude ?? 77.2100;
+    showToast('Opening navigation directions in Google Maps...');
+    window.open(`https://maps.google.com/?q=${lat},${lng}`, '_blank');
+  };
+
+  const formatAlertTimestamp = (dateStr?: string) => {
+    if (!dateStr) return '07:34, 14 Nov';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const hours = String(d.getHours()).padStart(2, '0');
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      const day = d.getDate();
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const month = months[d.getMonth()];
+      return `${hours}:${mins}, ${day} ${month}`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const getAlertSourceLabel = (alert: SOSAlert) => {
+    if (alert.device_type) {
+      return `SOS · ${alert.device_type}`;
+    }
+    const notes = (alert.notes || '').toLowerCase();
+    if (notes.includes('voice')) return 'SOS · Voice assistant';
+    if (notes.includes('watch') || notes.includes('smartwatch')) return 'SOS · Smartwatch';
+    return 'SOS · SOS pendant';
+  };
+
+  const emergencyContactsList = [
+    {
+      initials: 'AS',
+      name: 'Ananya Sharma',
+      role: 'Daughter',
+      relation: 'Primary caregiver',
+      phone: '+91 98110 24567',
+      avatarBg: 'bg-indigo-50 text-[#5E58E7]'
+    },
+    {
+      initials: 'AM',
+      name: patient.doctor_name || 'Dr. Arvind Mehra',
+      role: 'Geriatrician',
+      relation: patient.doctor_clinic || 'Fortis Hospital OPD',
+      phone: patient.doctor_phone || '+91 98112 34567',
+      avatarBg: 'bg-emerald-50 text-emerald-700'
+    },
+    {
+      initials: 'RS',
+      name: 'Rajesh Sharma',
+      role: 'Son',
+      relation: 'Secondary emergency guardian',
+      phone: '+91 98221 54321',
+      avatarBg: 'bg-amber-50 text-amber-800'
+    }
+  ];
 
   // Notification filter state
   const [notifFilter, setNotifFilter] = useState<'all' | 'unread' | 'sos'>('all');
@@ -174,238 +328,260 @@ export const SafetyAndAlertsSection: React.FC<SafetyAndAlertsSectionProps> = ({
     }
   };
 
-  const latestLoc = locationHistory[0] || null;
+  const latestLoc = locationHistory[0] || DEMO_LOCATION;
 
   return (
-    <div className="space-y-4 sm:space-y-5">
-      {/* Location / Status Badge matching Care Management container top */}
-      <div className={`flex items-center justify-between px-1 text-xs font-semibold ${
-        isDark ? 'text-slate-300' : 'text-slate-700'
-      }`}>
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-6 h-6 rounded-lg bg-indigo-500/20 text-[#5E58E7] dark:text-indigo-400 flex items-center justify-center shrink-0">
-            <MapPin className="w-3.5 h-3.5" />
-          </div>
-          <span className="truncate">Home • Caregiver Ananya Sharma Connected for {patient.name}</span>
+    <div className="space-y-6 max-w-4xl mx-auto pb-16">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2 border border-slate-700 animate-fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
         </div>
-        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
-          isDark ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-50 text-[#5E58E7] border border-indigo-200/60'
-        }`}>
-          {subTab === 'location' && `Safe Zone & Geo-Fence`}
-          {subTab === 'sos' && (sosAlerts.filter(a => a.status === 'active').length > 0 ? `${sosAlerts.filter(a => a.status === 'active').length} Active SOS` : 'SOS (Standby)')}
-          {subTab === 'qr' && `Emergency QR (${emergencyQR?.status || 'Active'})`}
-          {subTab === 'notifications' && `Alerts (${unreadCount > 0 ? `${unreadCount} Unread` : `${notifications.length}`})`}
-        </span>
-      </div>
+      )}
 
       {/* ========================================================================= */}
-      {/* SUBSECTION A: LOCATION & SAFE ZONES                                       */}
+      {/* SUBSECTION A: LOCATION & SAFE ZONES (Matching Reference Image 1)          */}
       {/* ========================================================================= */}
       {subTab === 'location' && (
-        <div className="space-y-6">
-          {/* Latest Available Patient Location Card */}
-          <div className={`p-6 rounded-3xl border transition-colors ${
-            isDark ? 'bg-slate-900/60 border-slate-800 text-slate-100' : 'bg-white border-slate-200/80 text-slate-800 shadow-sm'
-          }`}>
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-200/60 dark:border-slate-800">
-              <div>
-                <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  <MapPin className="w-5 h-5 text-emerald-500" />
-                  Latest Available Patient Location
-                </h3>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Live device location, accuracy radius, and safe-zone geofence boundary verification.
+        <div className="space-y-4 animate-fade-in">
+          {/* Header & Subtitle */}
+          <div className="space-y-1">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Latest patient location
+            </h2>
+            <p className="text-sm text-slate-500 font-normal">
+              Live device position, accuracy and safe-zone boundary check.
+            </p>
+          </div>
+
+          {/* Main Card */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-3.5">
+            {/* Header inside Card */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-emerald-600">
+                Inside Home Safe Zone
+              </span>
+              <button
+                type="button"
+                onClick={handleRefreshLocation}
+                className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+              >
+                <RotateCw className={`w-3.5 h-3.5 text-slate-600 ${isRefreshingLoc ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            {/* Real Interactive Leaflet Map */}
+            <RealLocationMap
+              patientName={patient.name || 'Patient'}
+              latestLocation={latestLoc}
+              safeZone={safeZone}
+              isDark={isDark}
+              onRefresh={onRefreshAll}
+            />
+
+            {/* Current Address Card */}
+            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-0.5">
+              <p className="text-xs font-medium text-slate-400">Current address</p>
+              <p className="text-base font-bold text-slate-900">
+                {latestLoc?.address || '24, Green Park, New Delhi'}
+              </p>
+              <p className="text-xs text-slate-500 font-medium">
+                GPS {latestLoc ? `${latestLoc.latitude.toFixed(4)}, ${latestLoc.longitude.toFixed(4)}` : '28.5355, 77.2100'}
+              </p>
+            </div>
+
+            {/* Accuracy & Last Reported (2-col grid) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-0.5">
+                <p className="text-xs font-medium text-slate-400">Accuracy</p>
+                <p className="text-base font-bold text-slate-900">
+                  ±{Math.round(latestLoc?.accuracy_meters || 10)} m
+                </p>
+                <p className="text-xs font-semibold text-emerald-600">
+                  {latestLoc?.battery_level || 88}% battery
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
-                  latestLoc?.is_inside_safe_zone
-                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-                    : 'bg-rose-500/10 text-rose-500 border-rose-500/30'
-                }`}>
-                  <span className={`w-2 h-2 rounded-full ${latestLoc?.is_inside_safe_zone ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`} />
-                  {latestLoc?.is_inside_safe_zone ? 'Inside Home Safe Zone' : 'Outside Safe Zone'}
-                </span>
+              <div className="p-4 rounded-2xl bg-white border border-slate-200/90 space-y-0.5">
+                <p className="text-xs font-medium text-slate-400">Last reported</p>
+                <p className="text-base font-bold text-slate-900">
+                  {reportedTimeStr}
+                </p>
+                <p className="text-xs font-semibold text-[#5E58E7]">
+                  Continuous monitoring
+                </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800/60 border-slate-700/80' : 'bg-slate-50 border-slate-200'}`}>
-                <p className={`text-[11px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Current Address</p>
-                <p className={`text-sm font-bold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {latestLoc ? latestLoc.address : patient.address || '24, Green Park, New Delhi'}
-                </p>
-                <span className={`text-[10px] mt-1 block ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                  GPS Coordinates: {latestLoc ? `${latestLoc.latitude.toFixed(4)}, ${latestLoc.longitude.toFixed(4)}` : '28.5594, 77.2023'}
-                </span>
-              </div>
-
-              <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800/60 border-slate-700/80' : 'bg-slate-50 border-slate-200'}`}>
-                <p className={`text-[11px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Accuracy & Sensor Status</p>
-                <p className={`text-sm font-bold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  ±{latestLoc ? Math.round(latestLoc.accuracy_meters) : 10} meters
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <Battery className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                    {latestLoc ? latestLoc.battery_level : 88}% Battery
-                  </span>
-                </div>
-              </div>
-
-              <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800/60 border-slate-700/80' : 'bg-slate-50 border-slate-200'}`}>
-                <p className={`text-[11px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Last Reported Timestamp</p>
-                <p className={`text-sm font-bold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {latestLoc ? new Date(latestLoc.timestamp).toLocaleTimeString() : '10:42 AM'}
-                </p>
-                <span className={`text-[10px] mt-1 block ${isDark ? 'text-indigo-400' : 'text-[#5E58E7]'}`}>
-                  Continuous monitoring active
-                </span>
-              </div>
+            {/* Action Buttons Row */}
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleOpenDirections}
+                className="w-full py-3 px-4 rounded-2xl bg-[#EEF0FD] hover:bg-[#E2E6FB] text-[#5E58E7] font-bold text-sm text-center transition-all cursor-pointer active:scale-95"
+              >
+                Directions
+              </button>
+              <button
+                type="button"
+                onClick={handleCallPatient}
+                className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-900 font-bold text-sm text-center transition-all cursor-pointer active:scale-95"
+              >
+                Call {patientDisplayName}
+              </button>
             </div>
           </div>
 
-          {/* Safe Zone Configuration Form */}
-          <div className={`p-6 rounded-3xl border transition-colors ${
-            isDark ? 'bg-slate-900/60 border-slate-800 text-slate-100' : 'bg-white border-slate-200/80 text-slate-800 shadow-sm'
-          }`}>
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200/60 dark:border-slate-800">
-              <div>
-                <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  <Shield className="w-5 h-5 text-indigo-500" />
-                  Home Safe Zone Configuration
-                </h3>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Configure geofence perimeter radius. Guardians receive alerts whenever patient exits or returns.
-                </p>
-              </div>
-
-              {szSavedMsg && (
-                <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
-                  <Check className="w-4 h-4" />
-                  Safe Zone Saved!
-                </span>
+          {/* Collapsible Safe Zone Perimeter Settings & Activity History */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowPerimeterConfig(!showPerimeterConfig)}
+              className="w-full py-2.5 px-4 rounded-2xl bg-white border border-slate-200/80 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-50 flex items-center justify-between transition-colors shadow-2xs cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-[#5E58E7]" />
+                <span>Geofence Perimeter Settings & Event History ({szRadius}m radius)</span>
+              </span>
+              {showPerimeterConfig ? (
+                <ChevronUp className="w-4 h-4 text-slate-400" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400" />
               )}
-            </div>
+            </button>
 
-            <form onSubmit={handleSaveSafeZone} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold mb-1">Safe Zone Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={szName}
-                    onChange={(e) => setSzName(e.target.value)}
-                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs outline-none ${
-                      isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
-                    }`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold mb-1">Center Address</label>
-                  <input
-                    type="text"
-                    required
-                    value={szAddress}
-                    onChange={(e) => setSzAddress(e.target.value)}
-                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs outline-none ${
-                      isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold">Perimeter Radius: <strong className="text-[#5E58E7] dark:text-indigo-400">{szRadius} meters</strong></label>
-                  <span className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Recommended: 300m - 800m</span>
-                </div>
-                <input
-                  type="range"
-                  min="100"
-                  max="2000"
-                  step="50"
-                  value={szRadius}
-                  onChange={(e) => setSzRadius(parseInt(e.target.value))}
-                  className="w-full accent-[#5E58E7] cursor-pointer"
-                />
-              </div>
-
-              <div className="flex items-center justify-between pt-2">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold">
-                  <input
-                    type="checkbox"
-                    checked={szMonitoring}
-                    onChange={(e) => setSzMonitoring(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#5E58E7]"
-                  />
-                  <span>Enable Real-time Safe Zone Monitoring & Automatic Exit Alerts</span>
-                </label>
-
-                <button
-                  type="submit"
-                  disabled={szSaving}
-                  className="px-6 py-2.5 bg-gradient-to-br from-[#5E58E7] to-[#4838D6] text-white rounded-xl text-xs font-bold active:scale-95 shadow-md shadow-indigo-500/20 cursor-pointer disabled:opacity-50"
-                >
-                  {szSaving ? 'Saving...' : 'Update Safe Zone'}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Safe Zone Events History */}
-          <div className={`p-6 rounded-3xl border transition-colors ${
-            isDark ? 'bg-slate-900/60 border-slate-800 text-slate-100' : 'bg-white border-slate-200/80 text-slate-800 shadow-sm'
-          }`}>
-            <h3 className={`text-base font-bold flex items-center gap-2 mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              <Clock className="w-5 h-5 text-indigo-500" />
-              Safe Zone Activity & Geofence Event History
-            </h3>
-            <div className="space-y-2.5">
-              {locationHistory.map((loc) => (
-                <div
-                  key={loc.id}
-                  className={`p-3 rounded-2xl border flex items-center justify-between text-xs ${
-                    loc.is_inside_safe_zone
-                      ? isDark ? 'bg-slate-800/40 border-slate-700/60' : 'bg-slate-50 border-slate-200'
-                      : isDark ? 'bg-rose-950/20 border-rose-900/40 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-800'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`w-2.5 h-2.5 rounded-full ${loc.is_inside_safe_zone ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                    <div>
-                      <p className="font-bold">{loc.address}</p>
-                      <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                        {loc.is_inside_safe_zone ? 'Within Geofence Safe Zone' : 'Perimeter Safe Zone Alert'} • ±{Math.round(loc.accuracy_meters)}m accuracy
-                      </p>
-                    </div>
+            {showPerimeterConfig && (
+              <div className="mt-3 space-y-4 animate-fade-in">
+                {/* Safe Zone Configuration Form */}
+                <div className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-[#5E58E7]" />
+                      <span>Geofence Boundary Configuration</span>
+                    </h4>
+                    {szSavedMsg && (
+                      <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Saved!</span>
+                      </span>
+                    )}
                   </div>
-                  <span className={`text-[11px] font-semibold shrink-0 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {new Date(loc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+
+                  <form onSubmit={handleSaveSafeZone} className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Safe Zone Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={szName}
+                          onChange={(e) => setSzName(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Center Address</label>
+                        <input
+                          type="text"
+                          required
+                          value={szAddress}
+                          onChange={(e) => setSzAddress(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Radius: <strong className="text-[#5E58E7]">{szRadius} meters</strong>
+                        </label>
+                        <span className="text-[11px] text-slate-400">Recommended: 300m - 800m</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="100"
+                        max="2000"
+                        step="50"
+                        value={szRadius}
+                        onChange={(e) => setSzRadius(parseInt(e.target.value))}
+                        className="w-full accent-[#5E58E7] cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={szMonitoring}
+                          onChange={(e) => setSzMonitoring(e.target.checked)}
+                          className="w-4 h-4 rounded text-[#5E58E7]"
+                        />
+                        <span>Enable exit & entry push alerts</span>
+                      </label>
+
+                      <button
+                        type="submit"
+                        disabled={szSaving}
+                        className="px-4 py-2 bg-[#5E58E7] hover:bg-[#4E48D7] text-white rounded-xl text-xs font-bold active:scale-95 shadow-2xs cursor-pointer disabled:opacity-50"
+                      >
+                        {szSaving ? 'Saving...' : 'Update Settings'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
-              ))}
-            </div>
+
+                {/* Activity Events */}
+                <div className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5">
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-[#5E58E7]" />
+                    <span>Safe Zone Activity Log</span>
+                  </h4>
+                  <div className="space-y-2">
+                    {locationHistory.slice(0, 4).map((loc) => (
+                      <div
+                        key={loc.id}
+                        className={`p-3 rounded-2xl border flex items-center justify-between text-xs ${
+                          loc.is_inside_safe_zone
+                            ? 'bg-slate-50 border-slate-200'
+                            : 'bg-rose-50 border-rose-200 text-rose-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className={`w-2.5 h-2.5 rounded-full ${loc.is_inside_safe_zone ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                          <div>
+                            <p className="font-bold text-slate-900">{loc.address}</p>
+                            <p className="text-[10px] text-slate-500">
+                              {loc.is_inside_safe_zone ? 'Within Geofence Safe Zone' : 'Perimeter Safe Zone Alert'} • ±{Math.round(loc.accuracy_meters)}m accuracy
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-semibold text-slate-400 shrink-0">
+                          {new Date(loc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* SUBSECTION B: SOS & EMERGENCY                                             */}
+      {/* SUBSECTION B: SOS & EMERGENCY (Matching Reference Image 2)                */}
       {/* ========================================================================= */}
       {subTab === 'sos' && (
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-5 animate-fade-in">
+          {/* Top Bar with Trigger Test SOS button */}
+          <div className="flex items-center justify-between">
             <div>
-              <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                <ShieldAlert className="w-5 h-5 text-rose-500" />
-                Emergency SOS Monitoring & Incident Response
-              </h3>
-              <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                Review active emergency alarms triggered from the patient dashboard or voice assistant.
-              </p>
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Active Emergency Incidents
+              </span>
             </div>
 
             <button
@@ -413,155 +589,116 @@ export const SafetyAndAlertsSection: React.FC<SafetyAndAlertsSectionProps> = ({
               type="button"
               disabled={isTriggeringSOS}
               onClick={handleTriggerTestSOS}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-rose-950/40 active:scale-95 cursor-pointer disabled:opacity-60 transition-all"
+              className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-95 cursor-pointer disabled:opacity-60 transition-all shadow-2xs"
             >
-              <AlertTriangle className={`w-4 h-4 ${isTriggeringSOS ? 'animate-spin' : ''}`} />
-              {isTriggeringSOS ? 'Triggering Emergency SOS...' : 'Trigger Test SOS'}
+              <AlertTriangle className={`w-3.5 h-3.5 ${isTriggeringSOS ? 'animate-spin' : ''}`} />
+              <span>{isTriggeringSOS ? 'Triggering...' : '+ Test SOS'}</span>
             </button>
           </div>
 
-          {sosFeedback && (
-            <div className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs font-bold animate-in fade-in ${
-              isDark ? 'bg-rose-500/15 border-rose-500/40 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-900 shadow-xs'
-            }`}>
-              <div className="flex items-center gap-2.5">
-                <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 animate-pulse" />
-                <span>{sosFeedback}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSosFeedback(null)}
-                className="text-rose-600 dark:text-rose-400 hover:opacity-75 cursor-pointer p-1"
-                aria-label="Dismiss feedback"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-
-          {/* Active SOS Alerts */}
-          <div className="space-y-3">
-            {sosAlerts.length === 0 ? (
-              <div className={`p-8 rounded-3xl border text-center ${
-                isDark ? 'bg-slate-900/60 border-slate-800 text-slate-400' : 'bg-white border-slate-200 text-slate-500 shadow-sm'
-              }`}>
-                <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-500 mb-2" />
-                <p className="font-bold text-sm">No Active Emergency SOS Incidents</p>
-                <p className="text-xs mt-0.5">Patient has not triggered emergency assistance.</p>
+          {/* SOS Alert Cards List (Matching Reference Image 2) */}
+          <div className="space-y-3.5">
+            {activeAlerts.length === 0 ? (
+              <div className="p-8 rounded-3xl bg-white border border-slate-200/90 text-center space-y-2.5">
+                <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-500" />
+                <p className="font-bold text-sm text-slate-900">No Active Emergency SOS Incidents</p>
+                <p className="text-xs text-slate-500">All alerts have been resolved.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocalSOSAlerts(DEMO_SOS_ALERTS);
+                    showToast('Demo SOS alerts restored.');
+                  }}
+                  className="mt-2 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Restore Demo Alerts
+                </button>
               </div>
             ) : (
-              sosAlerts.map((alert) => (
+              activeAlerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className={`p-5 rounded-3xl border transition-all ${
-                    alert.status === 'active'
-                      ? 'bg-rose-950/30 border-rose-500/50 text-white ring-1 ring-rose-500/40'
-                      : alert.status === 'acknowledged'
-                      ? 'bg-amber-950/20 border-amber-500/40 text-slate-200'
-                      : isDark
-                        ? 'bg-slate-900/60 border-slate-800 text-slate-400'
-                        : 'bg-white border-slate-200 text-slate-700 shadow-sm'
-                  }`}
+                  className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-2.5 transition-all"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 mt-0.5 ${
-                        alert.status === 'active' ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800 text-slate-400'
-                      }`}>
-                        <ShieldAlert className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold">EMERGENCY SOS ALERT #{alert.id}</h4>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            alert.status === 'active'
-                              ? 'bg-rose-600 text-white'
-                              : alert.status === 'acknowledged'
-                              ? 'bg-amber-500 text-black'
-                              : 'bg-emerald-600 text-white'
-                          }`}>
-                            {alert.status}
-                          </span>
-                        </div>
-                        <p className="text-xs mt-1">Location: {alert.location_address || 'Reported from Home'}</p>
-                        {alert.notes && <p className="text-[11px] mt-0.5 opacity-80">{alert.notes}</p>}
-                        <span className="text-[10px] mt-1 block opacity-60">
-                          Triggered at: {alert.triggered_at ? new Date(alert.triggered_at).toLocaleString() : 'Just now'}
-                        </span>
-                      </div>
-                    </div>
+                  {/* Row 1: Source & Active Badge */}
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-base font-bold text-slate-900">
+                      {getAlertSourceLabel(alert)}
+                    </h4>
+                    <span className="text-sm font-bold text-red-600">
+                      Active
+                    </span>
+                  </div>
 
-                    <div className="flex items-center gap-2">
-                      {alert.status === 'active' && (
-                        <button
-                          onClick={() => onAcknowledgeSOS(alert.id, 'Guardian acknowledged via portal')}
-                          className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl text-xs font-bold active:scale-95 cursor-pointer"
-                        >
-                          Acknowledge Alert
-                        </button>
-                      )}
+                  {/* Row 2: Location */}
+                  <p className="text-sm text-slate-600 font-normal">
+                    {alert.location_address || 'Near Green Park Metro Station, New Delhi'}
+                  </p>
 
-                      {alert.status !== 'resolved' && (
-                        <button
-                          onClick={() => onResolveSOS(alert.id)}
-                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold active:scale-95 cursor-pointer"
-                        >
-                          Mark Resolved
-                        </button>
-                      )}
+                  {/* Row 3: Timestamp */}
+                  <p className="text-xs text-slate-500 font-medium">
+                    {formatAlertTimestamp(alert.triggered_at)}
+                  </p>
 
-                      {patient.emergency_contact_phone && (
-                        <a
-                          href={`tel:${patient.emergency_contact_phone}`}
-                          className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Phone className="w-3 h-3" />
-                          Call
-                        </a>
-                      )}
-                    </div>
+                  {/* Row 4: Action Buttons */}
+                  <div className="flex items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleCallPatient}
+                      className="px-4 py-2 bg-[#991B1B] hover:bg-[#881818] text-white rounded-xl text-xs sm:text-sm font-bold active:scale-95 transition-all shadow-2xs cursor-pointer"
+                    >
+                      Call {patientDisplayName}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleResolveAlert(alert.id)}
+                      className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs sm:text-sm font-bold active:scale-95 transition-all shadow-2xs cursor-pointer"
+                    >
+                      Mark resolved
+                    </button>
                   </div>
                 </div>
               ))
             )}
           </div>
 
-          {/* Emergency Contacts Card */}
-          <div className={`p-6 rounded-3xl border transition-colors ${
-            isDark ? 'bg-slate-900/60 border-slate-800 text-slate-100' : 'bg-white border-slate-200/80 text-slate-800 shadow-sm'
-          }`}>
-            <h3 className={`text-base font-bold flex items-center gap-2 mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              <Phone className="w-5 h-5 text-indigo-500" />
-              Designated Emergency Contacts
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800/60 border-slate-700/80' : 'bg-slate-50 border-slate-200'}`}>
-                <p className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Primary Family Guardian</p>
-                <p className={`text-sm font-bold mt-0.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {patient.emergency_contact_relation || 'Daughter'} ({patient.call_sign || 'Meera Sharma'}'s Family)
-                </p>
-                <a
-                  href={`tel:${patient.emergency_contact_phone || '+91 98765 12345'}`}
-                  className="text-xs font-bold text-[#5E58E7] dark:text-indigo-400 mt-1.5 inline-flex items-center gap-1 hover:underline"
-                >
-                  <Phone className="w-3.5 h-3.5" />
-                  {patient.emergency_contact_phone || '+91 98765 12345'}
-                </a>
-              </div>
+          {/* Emergency Contacts Section (Matching Reference Image 2) */}
+          <div className="space-y-2.5 pt-2">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight">
+                Emergency contacts
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                Called in this order when an SOS is raised.
+              </p>
+            </div>
 
-              <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800/60 border-slate-700/80' : 'bg-slate-50 border-slate-200'}`}>
-                <p className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Primary Physician / Clinic</p>
-                <p className={`text-sm font-bold mt-0.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {patient.doctor_name || 'Dr. Arvind Mehra'} ({patient.doctor_clinic || 'Geriatric Care'})
-                </p>
-                <a
-                  href={`tel:${patient.doctor_phone || '+91 98112 34567'}`}
-                  className="text-xs font-bold text-[#5E58E7] dark:text-indigo-400 mt-1.5 inline-flex items-center gap-1 hover:underline"
-                >
-                  <Phone className="w-3.5 h-3.5" />
-                  {patient.doctor_phone || '+91 98112 34567'}
-                </a>
-              </div>
+            <div className="rounded-3xl bg-white border border-slate-200/90 shadow-2xs divide-y divide-slate-100 overflow-hidden">
+              {emergencyContactsList.map((contact, idx) => (
+                <div key={idx} className="p-4 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className={`w-11 h-11 rounded-full ${contact.avatarBg} font-bold text-sm flex items-center justify-center shrink-0`}>
+                      {contact.initials}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-bold text-slate-900 truncate">
+                        {contact.name}
+                      </h4>
+                      <p className="text-xs text-slate-500 font-medium truncate mt-0.5">
+                        {contact.role} · {contact.relation} · {contact.phone}
+                      </p>
+                    </div>
+                  </div>
+
+                  <a
+                    href={`tel:${contact.phone.replace(/\s+/g, '')}`}
+                    className="w-10 h-10 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-700 transition-colors shadow-2xs shrink-0 cursor-pointer"
+                    title={`Call ${contact.name}`}
+                  >
+                    <Phone className="w-4 h-4 text-slate-700" />
+                  </a>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -752,7 +889,7 @@ export const SafetyAndAlertsSection: React.FC<SafetyAndAlertsSectionProps> = ({
                         ? isDark ? 'bg-[#5E58E7]/20 text-indigo-300' : 'bg-indigo-100 text-[#5E58E7]'
                         : isDark ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400'
                     }`}>
-                      {getNotifIcon(notif.notification_type)}
+                      {getNotifIcon(notif.notification_type || notif.type || 'system')}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">

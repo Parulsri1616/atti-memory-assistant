@@ -523,15 +523,13 @@ export const SafetyAndSupportSection: React.FC<SafetyAndSupportSectionProps> = (
                         Mark Resolved
                       </button>
                     )}
-                    {patient.emergency_contact_phone && (
-                      <a
-                        href={`tel:${patient.emergency_contact_phone}`}
-                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700"
-                        title="Call Patient"
-                      >
-                        <Phone className="w-4 h-4" />
-                      </a>
-                    )}
+                    <a
+                      href={`tel:${((patient as any).phone || '+919811024567').replace(/\s+/g, '')}`}
+                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700"
+                      title={`Call ${patient.call_sign || patient.name || 'Patient'}`}
+                    >
+                      <Phone className="w-4 h-4" />
+                    </a>
                   </div>
                 </div>
               ))

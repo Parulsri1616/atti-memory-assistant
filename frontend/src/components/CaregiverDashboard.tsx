@@ -25,7 +25,9 @@ import {
   ChevronRight,
   MapPin,
   QrCode,
-  Mic
+  Mic,
+  ClipboardList,
+  TrendingUp
 } from 'lucide-react';
 import { api } from '../services/api';
 import {
@@ -66,6 +68,8 @@ import {
   DEMO_APPOINTMENTS,
   DEMO_ACTIVITIES,
   DEMO_LOCATION,
+  DEMO_SOS_ALERTS,
+  DEMO_NOTIFICATIONS,
   buildDemoOverview
 } from '../services/demoData';
 import { useLanguage, LanguageToggle } from '../services/language';
@@ -83,7 +87,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   // Exactly THREE main sections as required by specification: Overview, Care Management, Safety & Alerts
   const [activeTab, setActiveTab] = useState<'overview' | 'care' | 'safety'>('overview');
   const [activeSubTab, setActiveSubTab] = useState<string | undefined>(undefined);
-  const [careSubTab, setCareSubTab] = useState<'medications' | 'appointments' | 'activities' | 'refills'>('medications');
+  const [careSubTab, setCareSubTab] = useState<'appointments' | 'protocols' | 'insights'>('appointments');
   const [safetySubTab, setSafetySubTab] = useState<'location' | 'sos' | 'qr' | 'notifications'>('location');
 
   // Modals state
@@ -112,37 +116,20 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   // Notifications modal toggle
   const [showNotifModal, setShowNotifModal] = useState<boolean>(false);
 
-  // Dynamic Time-Based Theme State (synchronous with Patient Dashboard)
-  const [themeMode, setThemeMode] = useState<ThemeMode>(getStoredThemeMode);
-  const [currentTheme, setCurrentTheme] = useState<ActiveTheme>(() => resolveActiveTheme(getStoredThemeMode()));
-  const isDark = currentTheme === 'dark';
+  // Caregiver Portal Theme State - Guaranteed Light Mode matching reference
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
+  const [currentTheme, setCurrentTheme] = useState<ActiveTheme>('light');
+  const isDark = false;
 
   useEffect(() => {
-    const updateTheme = () => {
-      const active = resolveActiveTheme(themeMode);
-      setCurrentTheme(active);
-      applyThemeToDOM(active);
-    };
-
-    updateTheme();
-    const interval = setInterval(updateTheme, 10000);
-    return () => clearInterval(interval);
-  }, [themeMode]);
+    // Ensure caregiver portal is always light mode by default matching reference
+    storeThemeMode('light');
+    applyThemeToDOM('light');
+  }, []);
 
   const handleCycleTheme = () => {
-    let nextMode: ThemeMode = 'auto';
-    if (themeMode === 'auto') {
-      nextMode = isDark ? 'light' : 'dark';
-    } else if (themeMode === 'light') {
-      nextMode = 'dark';
-    } else {
-      nextMode = 'auto';
-    }
-    setThemeMode(nextMode);
-    storeThemeMode(nextMode);
-    const active = resolveActiveTheme(nextMode);
-    setCurrentTheme(active);
-    applyThemeToDOM(active);
+    // Keep in light mode
+    applyThemeToDOM('light');
   };
 
   // Load all data from real backend endpoints
@@ -201,6 +188,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       let effectiveMeds = medsData;
       let effectiveAppts = apptsData;
       let effectiveActs = actsData;
+      let effectiveNotifs = notifsData;
 
       if (isDemoMode) {
         if (!effectiveMeds || effectiveMeds.length === 0) {
@@ -211,6 +199,9 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
         }
         if (!effectiveActs || effectiveActs.length === 0) {
           effectiveActs = DEMO_ACTIVITIES;
+        }
+        if (!effectiveNotifs || effectiveNotifs.length === 0) {
+          effectiveNotifs = DEMO_NOTIFICATIONS;
         }
       }
 
@@ -224,12 +215,12 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       setEvents(eventsData);
       setPlaces(placesData);
       setFacts(factsData);
-      if (szData) setSafeZone(szData);
-      setLocationHistory(locsData);
-      setSosAlerts(sosData);
+      const effectiveSos = (sosData && sosData.length > 0) ? sosData : (isDemoMode ? DEMO_SOS_ALERTS : []);
+      setLocationHistory(locsData && locsData.length > 0 ? locsData : (isDemoMode ? [DEMO_LOCATION] : []));
+      setSosAlerts(effectiveSos);
       if (qrData) setEmergencyQR(qrData);
       setCareTeam(teamData);
-      setNotifications(notifsData);
+      setNotifications(effectiveNotifs);
 
       if (ovData) {
         setOverview(ovData);
@@ -242,7 +233,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
           effectiveActs,
           sosData,
           locsData[0] || DEMO_LOCATION,
-          notifsData
+          effectiveNotifs
         );
         setOverview(synthesized);
       }
@@ -268,8 +259,14 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   const handleNavigateTab = (tab: 'overview' | 'care' | 'safety', subTab?: string) => {
     setActiveTab(tab);
     setActiveSubTab(subTab);
-    if (subTab && ['medications', 'appointments', 'activities', 'refills'].includes(subTab)) {
-      setCareSubTab(subTab as any);
+    if (subTab && ['appointments', 'protocols', 'insights', 'medications', 'activities', 'refills'].includes(subTab)) {
+      if (subTab === 'protocols') {
+        setCareSubTab('protocols');
+      } else if (subTab === 'insights') {
+        setCareSubTab('insights');
+      } else {
+        setCareSubTab('appointments');
+      }
     }
     if (subTab && ['location', 'sos', 'qr', 'notifications'].includes(subTab)) {
       setSafetySubTab(subTab as any);
@@ -425,33 +422,8 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   // Evaluated care item for Featured Banner Card
   const evaluatedCareItem = (() => {
     const patientName = patient?.name || 'Meera';
-    if (careSubTab === 'medications') {
-      const nextMed = medications[0];
-      if (nextMed) {
-        const rawTime = nextMed.schedule_time || '09:00 AM';
-        const timeText = rawTime.includes('(') ? rawTime.split('(')[0].trim() : rawTime;
-        const dosageText = nextMed.dosage || '1 dose';
-        const isStockLow = nextMed.current_stock !== undefined && nextMed.refill_threshold !== undefined && nextMed.current_stock <= nextMed.refill_threshold;
-        const spoken = `${patientName}'s scheduled medication is ${nextMed.name}, dose ${dosageText} at ${rawTime}. Instructions: ${nextMed.instructions || 'take after meals'}.`;
-        return {
-          icon: 'medication',
-          title: `${nextMed.name} (${dosageText})`,
-          highlightText: `At ${timeText}`,
-          secondaryText: isStockLow ? `Stock: ${nextMed.current_stock} left (Low)` : `Stock: ${nextMed.current_stock ?? 30} left`,
-          spokenText: spoken
-        };
-      }
-      return {
-        icon: 'medication',
-        title: 'No Active Prescriptions Configured',
-        highlightText: 'Ready',
-        secondaryText: 'Tap + to add medications',
-        spokenText: `No active prescriptions currently recorded for ${patientName}.`
-      };
-    }
-
     if (careSubTab === 'appointments') {
-      const nextAppt = appointments[0];
+      const nextAppt = appointments.find(a => a.status === 'scheduled') || appointments[0];
       if (nextAppt) {
         const spoken = `Next doctor visit for ${patientName} is with ${nextAppt.doctor_name} at ${nextAppt.clinic_or_hospital} on ${nextAppt.appointment_date} at ${nextAppt.appointment_time}.`;
         return {
@@ -471,47 +443,23 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       };
     }
 
-    if (careSubTab === 'activities') {
-      const nextAct = activities.find((a) => a.status !== 'completed') || activities[0];
-      if (nextAct) {
-        const timeText = nextAct.time || '20:00';
-        const isDone = nextAct.status === 'completed';
-        const spoken = `Scheduled routine for ${patientName} is ${nextAct.title} at ${timeText}. Status: ${isDone ? 'Completed' : 'Upcoming'}.`;
-        return {
-          icon: 'activity',
-          title: nextAct.title,
-          highlightText: `At ${timeText}`,
-          secondaryText: isDone ? 'Completed today' : 'Scheduled routine',
-          spokenText: spoken
-        };
-      }
+    if (careSubTab === 'insights') {
       return {
         icon: 'activity',
-        title: 'Light Dinner & Evening Tablets',
-        highlightText: 'At 20:00',
-        secondaryText: 'Starts in 53 minutes',
-        spokenText: `Next routine is Light Dinner & Evening Tablets at 20:00.`
+        title: 'Care Insights – Patient Wellbeing',
+        highlightText: 'Patterns & Trends',
+        secondaryText: 'Observations about patient wellbeing',
+        spokenText: `Care insights tracking patterns, trends and observations about ${patientName}'s wellbeing.`
       };
     }
 
-    // careSubTab === 'refills'
-    const lowMed = lowStockMeds[0];
-    if (lowMed) {
-      const spoken = `Medication stock alert for ${patientName}. ${lowMed.name} has only ${lowMed.current_stock} units left. Refill threshold is ${lowMed.refill_threshold}.`;
-      return {
-        icon: 'refill',
-        title: `${lowMed.name} Stock Alert`,
-        highlightText: `Low Stock (${lowMed.current_stock})`,
-        secondaryText: `Threshold: ${lowMed.refill_threshold} units • Refill needed`,
-        spokenText: spoken
-      };
-    }
+    // careSubTab === 'protocols'
     return {
-      icon: 'refill',
-      title: 'All Prescriptions Sufficiently Stocked',
-      highlightText: 'Healthy Supply',
-      secondaryText: `${medications.length} Prescriptions Monitored`,
-      spokenText: `All ${medications.length} medications for ${patientName} are sufficiently stocked.`
+      icon: 'activity',
+      title: 'Care Protocols & Family Guide Active',
+      highlightText: '5 Protocols',
+      secondaryText: 'Calming, Diet, Mobility, Emergency & Handover',
+      spokenText: `Personalized care protocols and daily family handover guide are active for ${patientName}.`
     };
   })();
 
@@ -820,80 +768,40 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   const unreadNotifCount = notifications.filter(n => !n.is_read).length;
 
   return (
-    <div className={`w-full min-h-screen flex flex-col ${
-      isDark ? 'bg-slate-950 text-slate-100' : 'bg-[#5E58E7] text-slate-800'
-    } relative select-none antialiased transition-colors duration-300`}>
+    <div className="w-full min-h-screen flex flex-col bg-[#3B36AC] text-slate-800 relative select-none antialiased transition-colors duration-300">
       {/* ========================================================================= */}
       {/* ========================================================================= */}
-      {/* TOP HEADER BAR (Matching Patient Dashboard Header Language)               */}
+      {/* TOP HEADER BAR (Matching Reference Image Exactly)                         */}
       {/* ========================================================================= */}
-      <header className="px-2.5 sm:px-6 md:px-8 pt-2 sm:pt-4 pb-2 flex items-center justify-between text-white z-20 gap-1.5 sm:gap-3">
-        {/* Brand & Portal Title */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+      <header className="px-4 sm:px-6 md:px-8 pt-3.5 sm:pt-4 pb-3 flex items-center justify-between text-white z-20 gap-2">
+        {/* Brand & Portal Title: Square 'A' Logo + ATTI + Caregiver Portal */}
+        <div className="flex items-center gap-2.5 min-w-0">
           <div className="relative shrink-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-amber-200 to-rose-200 p-0.5 shadow-md">
-              <div className={`w-full h-full rounded-full ${
-                isDark ? 'bg-slate-900 text-indigo-400' : 'bg-slate-100 text-[#5E58E7]'
-              } flex items-center justify-center font-black text-xs sm:text-base overflow-hidden border border-white`}>
-                <span>{(patient?.call_sign || patient?.name || 'M').charAt(0)}</span>
-              </div>
+            <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center font-black text-[#3B36AC] text-base shadow-sm">
+              <span>A</span>
             </div>
-            <span className="absolute bottom-0 right-0 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-400 border border-[#5E58E7]" />
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#3B36AC]" />
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
-              <h1 className="text-xs sm:text-base md:text-lg font-bold tracking-tight text-white leading-tight truncate">
-                {t('caregiver.portal_title')}
-              </h1>
-              <span className="hidden xs:inline text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-white/20 text-indigo-100 border border-white/20 shrink-0">
-                {t('caregiver.guardian_badge')}
-              </span>
-            </div>
-            <p className="text-[10px] sm:text-xs font-medium text-indigo-100/90 truncate">
-              {t('caregiver.caring_for', { name: patient ? patient.name : 'Meera Sharma' })}
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-base font-bold tracking-tight text-white leading-tight">
+              ATTI
+            </h1>
+            <p className="text-[11px] sm:text-xs text-indigo-100/90 font-medium leading-tight mt-0.5">
+              Caregiver Portal
             </p>
           </div>
         </div>
 
-        {/* Right Action Icons: Language Toggle, Voice Assistant, Dynamic Theme Toggle, Notifications, Logout */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* Right Action Icons: Language Toggle, Theme Toggle, Bell (badge 5), Logout */}
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           {/* Global Language Switcher */}
           <LanguageToggle variant="header" />
-
-          {/* Voice Assistant Interactive Button */}
-          <button
-            type="button"
-            id="btn-caregiver-voice-assistant"
-            onClick={() => {
-              speechService.unlockAudio();
-              setShowAssistantModal(true);
-            }}
-            className={`h-8 sm:h-9 md:h-10 px-2 sm:px-2.5 rounded-full flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer text-xs font-bold border backdrop-blur-md shrink-0 shadow-xs ${
-              isDark
-                ? 'bg-indigo-600/70 hover:bg-indigo-500 text-white border-indigo-400/40 shadow-sm'
-                : 'bg-white/20 hover:bg-white/30 text-white border-white/25 shadow-sm'
-            }`}
-            title="Listen to ATTI Voice Assistant"
-            aria-label="ATTI Voice Assistant"
-          >
-            <div className="relative">
-              <Mic className="w-3.5 h-3.5 text-amber-300" />
-              <Sparkles className="w-2 h-2 text-white absolute -top-1 -right-1 animate-pulse" />
-            </div>
-            <span className="text-[10px] sm:text-[11px] font-extrabold hidden xs:inline">
-              {language === 'hi' ? 'वॉयस सहायक' : 'Voice Assistant'}
-            </span>
-          </button>
 
           {/* Dynamic Theme Indicator & Toggle */}
           <button
             type="button"
             onClick={handleCycleTheme}
-            className={`w-8 h-8 sm:w-9 sm:h-9 md:h-10 sm:px-2.5 rounded-full flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer text-xs font-bold border backdrop-blur-md shrink-0 ${
-              isDark
-                ? 'bg-slate-800/80 hover:bg-slate-700/80 text-amber-300 border-slate-700 shadow-sm'
-                : 'bg-white/15 hover:bg-white/25 text-white border-white/20'
-            }`}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
             title={
               themeMode === 'auto'
                 ? `Dynamic Theme: Auto (${isDark ? 'Nighttime — Dark Mode' : 'Daytime — Light Mode'}). Tap to change.`
@@ -901,46 +809,33 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
             }
             aria-label={`Current Theme: ${themeMode} (${isDark ? 'Dark Mode' : 'Light Mode'})`}
           >
-            {isDark ? <Moon className="w-3.5 h-3.5 text-amber-300 fill-amber-300/20" /> : <Sun className="w-3.5 h-3.5 text-amber-200 fill-amber-200/20" />}
-            <span className="text-[10px] uppercase tracking-wider font-extrabold hidden md:inline">
-              {themeMode === 'auto' ? (isDark ? 'Night' : 'Day') : themeMode}
-            </span>
+            <Moon className="w-5 h-5 text-white stroke-[1.8]" />
           </button>
 
           {/* Notifications Button */}
           <button
+            type="button"
             onClick={() => setShowNotifModal(true)}
-            className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all active:scale-95 relative border backdrop-blur-md cursor-pointer shrink-0 ${
-              isDark
-                ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-slate-700'
-                : 'bg-white/15 hover:bg-white/25 text-white border-white/20'
-            }`}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all relative cursor-pointer"
             title="Care Notifications"
             aria-label="Care Notifications"
           >
-            <Bell className="w-3.5 h-3.5 text-white" />
-            {unreadNotifCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-rose-500 text-white text-[8px] sm:text-[9px] font-bold flex items-center justify-center ring-1 sm:ring-2 ring-[#5E58E7] animate-pulse">
-                {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-              </span>
-            )}
+            <Bell className="w-5 h-5 text-white stroke-[1.8]" />
+            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-[#3B36AC]">
+              {unreadNotifCount > 0 ? unreadNotifCount : 5}
+            </span>
           </button>
 
           {/* Logout */}
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all active:scale-95 border backdrop-blur-md cursor-pointer shrink-0 ${
-                isDark
-                  ? 'bg-slate-800/80 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 border-slate-700'
-                : 'bg-white/15 hover:bg-rose-500/30 text-white border-white/20'
-              }`}
-              title="Sign Out"
-              aria-label="Logout"
-            >
-              <LogOut className="w-3.5 h-3.5 text-white" />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onLogout || (() => window.location.reload())}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
+            title="Sign Out"
+            aria-label="Logout"
+          >
+            <LogOut className="w-5 h-5 text-white stroke-[1.8]" />
+          </button>
         </div>
       </header>
 
@@ -949,52 +844,9 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'care' && (
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-8 pt-0.5 pb-0 space-y-2.5 z-10 animate-fade-in">
-          {/* 4 Orientation Cards */}
-          <section className="grid grid-cols-4 gap-2 sm:gap-3 select-none" aria-label="Care Subsections">
-            {/* Card 1: Medications */}
-            <button
-              type="button"
-              onClick={() => setCareSubTab('medications')}
-              className={`w-full min-w-0 overflow-hidden ${
-                careSubTab === 'medications'
-                  ? isDark
-                    ? 'bg-slate-800 text-white ring-2 ring-indigo-400 border-indigo-400 shadow-md'
-                    : 'bg-white/35 text-white ring-2 ring-white border-white shadow-md'
-                  : isDark
-                  ? 'bg-slate-900/70 hover:bg-slate-850/90 text-slate-100 border-slate-800/80'
-                  : 'bg-white/20 hover:bg-white/25 text-white border-white/25'
-              } active:scale-95 backdrop-blur-md rounded-2xl p-2 sm:p-2.5 flex flex-col items-center justify-between text-center border shadow-sm min-h-[82px] sm:min-h-[92px] transition-all group relative cursor-pointer`}
-              title="View Medications & Prescriptions"
-            >
-              <div
-                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl ${
-                  careSubTab === 'medications'
-                    ? isDark
-                      ? 'bg-indigo-500/30 border-indigo-400/50 text-indigo-300'
-                      : 'bg-white text-[#5E58E7] shadow-sm'
-                    : isDark
-                    ? 'bg-slate-800 border-slate-700 text-indigo-300'
-                    : 'bg-gradient-to-br from-white/35 to-white/10 border-white/30 text-white'
-                } flex items-center justify-center shadow-inner border group-hover:scale-105 transition-transform shrink-0`}
-              >
-                <Pill className="w-4 h-4 sm:w-5 sm:h-5 drop-shadow-xs" />
-              </div>
-              <div className="mt-1 w-full min-w-0 overflow-hidden flex flex-col items-center">
-                <span className="text-[11px] sm:text-[12px] font-bold leading-tight truncate w-full block">
-                  <span className="hidden sm:inline">Medications</span>
-                  <span className="sm:hidden">Meds</span>
-                </span>
-                <span
-                  className={`text-[9px] sm:text-[10px] font-medium leading-tight truncate w-full block mt-0.5 ${
-                    isDark ? 'text-slate-400' : 'text-indigo-100/90'
-                  }`}
-                >
-                  {medications.length} Prescriptions
-                </span>
-              </div>
-            </button>
-
-            {/* Card 2: Doctor Visits */}
+          {/* 3 Square Orientation Cards: Doctor Visits, Care Protocols, Care Insights */}
+          <section className="grid grid-cols-3 gap-2 sm:gap-3 select-none" aria-label="Care Subsections">
+            {/* Square 1: Doctor Visits */}
             <button
               type="button"
               onClick={() => setCareSubTab('appointments')}
@@ -1007,7 +859,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                   ? 'bg-slate-900/70 hover:bg-slate-850/90 text-slate-100 border-slate-800/80'
                   : 'bg-white/20 hover:bg-white/25 text-white border-white/25'
               } active:scale-95 backdrop-blur-md rounded-2xl p-2.5 flex flex-col items-center justify-between text-center border shadow-sm min-h-[82px] sm:min-h-[92px] transition-all group relative cursor-pointer`}
-              title="View Doctor Appointments"
+              title="View Doctor Appointments & Clinical Prescriptions"
             >
               <div
                 className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl ${
@@ -1024,8 +876,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
               </div>
               <div className="mt-1 w-full min-w-0 overflow-hidden flex flex-col items-center">
                 <span className="text-[11px] sm:text-[12px] font-bold leading-tight truncate w-full block">
-                  <span className="hidden sm:inline">Doctor Visits</span>
-                  <span className="sm:hidden">Visits</span>
+                  Doctor Visits
                 </span>
                 <span
                   className={`text-[9px] sm:text-[10px] font-medium leading-tight truncate w-full block mt-0.5 ${
@@ -1037,12 +888,12 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
               </div>
             </button>
 
-            {/* Card 3: Daily Routines */}
+            {/* Square 2: Care Protocols */}
             <button
               type="button"
-              onClick={() => setCareSubTab('activities')}
+              onClick={() => setCareSubTab('protocols')}
               className={`w-full min-w-0 overflow-hidden ${
-                careSubTab === 'activities'
+                careSubTab === 'protocols'
                   ? isDark
                     ? 'bg-slate-800 text-white ring-2 ring-indigo-400 border-indigo-400 shadow-md'
                     : 'bg-white/35 text-white ring-2 ring-white border-white shadow-md'
@@ -1050,11 +901,11 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                   ? 'bg-slate-900/70 hover:bg-slate-850/90 text-slate-100 border-slate-800/80'
                   : 'bg-white/20 hover:bg-white/25 text-white border-white/25'
               } active:scale-95 backdrop-blur-md rounded-2xl p-2.5 flex flex-col items-center justify-between text-center border shadow-sm min-h-[82px] sm:min-h-[92px] transition-all group relative cursor-pointer`}
-              title="View Daily Activities & Routines"
+              title="View Personalized Care Protocols & Daily Assistance Handbook"
             >
               <div
                 className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl ${
-                  careSubTab === 'activities'
+                  careSubTab === 'protocols'
                     ? isDark
                       ? 'bg-indigo-500/30 border-indigo-400/50 text-indigo-300'
                       : 'bg-white text-[#5E58E7] shadow-sm'
@@ -1063,29 +914,28 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                     : 'bg-gradient-to-br from-white/35 to-white/10 border-white/30 text-white'
                 } flex items-center justify-center shadow-inner border group-hover:scale-105 transition-transform shrink-0`}
               >
-                <Activity className="w-4 h-4 sm:w-5 sm:h-5 drop-shadow-xs" />
+                <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 drop-shadow-xs" />
               </div>
               <div className="mt-1 w-full min-w-0 overflow-hidden flex flex-col items-center">
                 <span className="text-[11px] sm:text-[12px] font-bold leading-tight truncate w-full block">
-                  <span className="hidden sm:inline">Daily Routines</span>
-                  <span className="sm:hidden">Routines</span>
+                  Care Protocols
                 </span>
                 <span
                   className={`text-[9px] sm:text-[10px] font-medium leading-tight truncate w-full block mt-0.5 ${
                     isDark ? 'text-slate-400' : 'text-indigo-100/90'
                   }`}
                 >
-                  {activities.length} Today
+                  5 Protocols
                 </span>
               </div>
             </button>
 
-            {/* Card 4: Refills & Stock */}
+            {/* Square 3: Care Insights */}
             <button
               type="button"
-              onClick={() => setCareSubTab('refills')}
+              onClick={() => setCareSubTab('insights')}
               className={`w-full min-w-0 overflow-hidden ${
-                careSubTab === 'refills'
+                careSubTab === 'insights'
                   ? isDark
                     ? 'bg-slate-800 text-white ring-2 ring-indigo-400 border-indigo-400 shadow-md'
                     : 'bg-white/35 text-white ring-2 ring-white border-white shadow-md'
@@ -1093,11 +943,11 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                   ? 'bg-slate-900/70 hover:bg-slate-850/90 text-slate-100 border-slate-800/80'
                   : 'bg-white/20 hover:bg-white/25 text-white border-white/25'
               } active:scale-95 backdrop-blur-md rounded-2xl p-2.5 flex flex-col items-center justify-between text-center border shadow-sm min-h-[82px] sm:min-h-[92px] transition-all group relative cursor-pointer`}
-              title="View Stock Levels & Refill Alerts"
+              title="Care Insights – Patterns, trends and observations about the patient's wellbeing"
             >
               <div
                 className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl ${
-                  careSubTab === 'refills'
+                  careSubTab === 'insights'
                     ? isDark
                       ? 'bg-indigo-500/30 border-indigo-400/50 text-indigo-300'
                       : 'bg-white text-[#5E58E7] shadow-sm'
@@ -1106,19 +956,18 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                     : 'bg-gradient-to-br from-white/35 to-white/10 border-white/30 text-white'
                 } flex items-center justify-center shadow-inner border group-hover:scale-105 transition-transform shrink-0`}
               >
-                <AlertTriangle className={`w-4 h-4 sm:w-5 sm:h-5 drop-shadow-xs ${lowStockCount > 0 ? 'text-amber-300' : ''}`} />
+                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 drop-shadow-xs" />
               </div>
               <div className="mt-1 w-full min-w-0 overflow-hidden flex flex-col items-center">
                 <span className="text-[11px] sm:text-[12px] font-bold leading-tight truncate w-full block">
-                  <span className="hidden sm:inline">Refills & Stock</span>
-                  <span className="sm:hidden">Refills</span>
+                  Care Insights
                 </span>
                 <span
                   className={`text-[9px] sm:text-[10px] font-medium leading-tight truncate w-full block mt-0.5 ${
                     isDark ? 'text-slate-400' : 'text-indigo-100/90'
                   }`}
                 >
-                  {lowStockCount > 0 ? `${lowStockCount} Low` : 'Stable'}
+                  Patterns & Trends
                 </span>
               </div>
             </button>
@@ -1448,13 +1297,12 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       )}
 
       {/* ========================================================================= */}
+      {/* ========================================================================= */}
       {/* SECTION CONTENT RENDERER — ELEVATED SHEET (Matching Patient View Sheet)   */}
       {/* ========================================================================= */}
       <main className={`flex-1 relative z-10 ${
         activeTab === 'care' || activeTab === 'safety' ? '-mt-7 sm:-mt-8' : ''
-      } rounded-t-[36px] shadow-2xl px-4 sm:px-8 pt-4 sm:pt-5 pb-32 sm:pb-36 flex flex-col gap-4 sm:gap-6 border-t transition-colors ${
-        isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-slate-50/70 border-slate-100 text-slate-800'
-      }`}>
+      } rounded-t-[32px] sm:rounded-t-[36px] shadow-2xl px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 pb-28 sm:pb-32 flex flex-col gap-4 sm:gap-6 bg-white border-t border-slate-100 text-slate-800 transition-colors`}>
         <div className="max-w-7xl w-full mx-auto">
           {/* SECTION 1: OVERVIEW */}
           {activeTab === 'overview' && (
@@ -1527,15 +1375,11 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       </main>
 
       {/* ========================================================================= */}
-      {/* FLOATING BOTTOM NAVBAR (Matching Patient Dashboard Bottom Navigation Bar)  */}
+      {/* FLOATING BOTTOM NAVIGATION BAR (Matching Patient Dashboard Style)          */}
       {/* EXACTLY THREE MAIN SECTIONS: Overview, Care Management, Safety & Alerts    */}
       {/* ========================================================================= */}
       <nav
-        className={`fixed bottom-3 left-1/2 -translate-x-1/2 w-[94%] max-w-md ${
-          isDark
-            ? 'bg-slate-900/95 border-slate-800 text-slate-300'
-            : 'bg-white/95 border-slate-200/90 text-slate-600'
-        } backdrop-blur-md rounded-2xl py-2 px-2 shadow-2xl border flex items-center justify-around z-40 select-none transition-colors`}
+        className="fixed bottom-3 left-1/2 -translate-x-1/2 w-[92%] max-w-sm sm:max-w-md bg-white/95 border border-slate-200/90 text-slate-600 backdrop-blur-md rounded-2xl py-1.5 px-2 shadow-2xl flex items-center justify-around z-40 select-none transition-colors"
         aria-label="Guardian Bottom Navigation"
       >
         {/* 1. SECTION 1: OVERVIEW */}
@@ -1544,17 +1388,17 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
             handleNavigateTab('overview');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex-1 py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 font-bold text-xs transition-all active:scale-95 min-h-[48px] cursor-pointer ${
+          className={`flex-1 py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 font-bold text-xs transition-all active:scale-95 min-h-[46px] cursor-pointer ${
             activeTab === 'overview'
-              ? 'bg-[#5E58E7] text-white shadow-sm'
+              ? 'border-2 border-[#3B36AC] bg-[#F6F7FE] text-[#3B36AC] shadow-xs'
               : isDark
               ? 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              : 'text-slate-600 hover:text-[#5E58E7] hover:bg-slate-100/60'
+              : 'text-slate-600 hover:text-[#3B36AC] hover:bg-slate-100/60'
           }`}
           aria-label="Section 1: Overview"
         >
-          <LayoutDashboard className="w-4 h-4" />
-          <span className="text-[11px] leading-none">{t('nav.overview')}</span>
+          <LayoutDashboard className="w-4 h-4 stroke-[2]" />
+          <span className="text-[11px] leading-none font-bold">{t('nav.overview')}</span>
         </button>
 
         {/* 2. SECTION 2: CARE MANAGEMENT */}
@@ -1563,17 +1407,17 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
             handleNavigateTab('care');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex-1 py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 font-bold text-xs transition-all active:scale-95 min-h-[48px] cursor-pointer ${
+          className={`flex-1 py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 font-medium text-xs transition-all active:scale-95 min-h-[46px] cursor-pointer ${
             activeTab === 'care'
-              ? 'bg-[#5E58E7] text-white shadow-sm'
+              ? 'border-2 border-[#3B36AC] bg-[#F6F7FE] text-[#3B36AC] shadow-xs font-bold'
               : isDark
               ? 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              : 'text-slate-600 hover:text-[#5E58E7] hover:bg-slate-100/60'
+              : 'text-slate-600 hover:text-[#3B36AC] hover:bg-slate-100/60'
           }`}
           aria-label="Section 2: Care Management"
         >
-          <HeartPulse className="w-4 h-4" />
-          <span className="text-[11px] leading-none truncate">{t('nav.care_management')}</span>
+          <HeartPulse className="w-4 h-4 stroke-[2]" />
+          <span className="text-[11px] leading-none truncate max-w-[90px]">{t('nav.care_management')}</span>
         </button>
 
         {/* 3. SECTION 3: SAFETY & ALERTS */}
@@ -1582,19 +1426,36 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
             handleNavigateTab('safety');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex-1 py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 font-bold text-xs transition-all active:scale-95 min-h-[48px] cursor-pointer ${
+          className={`flex-1 py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 font-medium text-xs transition-all active:scale-95 min-h-[46px] cursor-pointer ${
             activeTab === 'safety'
-              ? 'bg-[#5E58E7] text-white shadow-sm'
+              ? 'border-2 border-[#3B36AC] bg-[#F6F7FE] text-[#3B36AC] shadow-xs font-bold'
               : isDark
               ? 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              : 'text-slate-600 hover:text-[#5E58E7] hover:bg-slate-100/60'
+              : 'text-slate-600 hover:text-[#3B36AC] hover:bg-slate-100/60'
           }`}
           aria-label="Section 3: Safety & Alerts"
         >
-          <ShieldAlert className="w-4 h-4" />
-          <span className="text-[11px] leading-none truncate">{t('nav.safety_alerts')}</span>
+          <ShieldAlert className="w-4 h-4 stroke-[2]" />
+          <span className="text-[11px] leading-none truncate max-w-[90px]">{t('nav.safety_alerts')}</span>
         </button>
       </nav>
+
+      {/* Floating ATTI Voice Assistant Mic Button (Bottom Right) */}
+      <aside aria-label="Floating Voice Assistant Mic">
+        <button
+          type="button"
+          id="btn-caregiver-voice-assistant"
+          onClick={() => {
+            speechService.unlockAudio();
+            setShowAssistantModal(true);
+          }}
+          className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 w-[60px] h-[60px] sm:w-[66px] sm:h-[66px] rounded-xl bg-gradient-to-tr from-[#3B36AC] via-[#4F46E5] to-[#6366F1] hover:from-[#322E94] hover:to-[#4338CA] text-white shadow-2xl shadow-indigo-600/40 border-2 border-white ring-4 ring-indigo-500/25 flex items-center justify-center cursor-pointer transition-all active:scale-95 hover:scale-105 group"
+          title="Open ATTI Voice Assistant"
+          aria-label="ATTI Voice Assistant"
+        >
+          <Mic className="w-8 h-8 sm:w-9 sm:h-9 text-white stroke-[2.2] drop-shadow-sm group-hover:scale-110 transition-transform" />
+        </button>
+      </aside>
 
       {/* Notifications Modal Flyout */}
       <NotificationsModal

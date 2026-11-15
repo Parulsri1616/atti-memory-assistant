@@ -3,12 +3,25 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 from ..database import get_db
-from ..models import DailyRoutine, Medication, Patient
-from ..schemas import RoutineCreate, RoutineOut, MedicationCreate, MedicationOut
+from ..models import DailyRoutine, Medication, Patient, ActivityLog, MedicationLog, Notification, DoctorAppointment
+from ..schemas import RoutineCreate, RoutineOut, MedicationCreate, MedicationOut, DoctorAppointmentOut
 from ..rag.date_resolver import resolve_datetime
 from ..auth import get_current_patient
 
 router = APIRouter(prefix="/routines", tags=["Routines & Medications"])
+
+# --- Patient Appointments ---
+@router.get("/appointments", response_model=List[DoctorAppointmentOut])
+def get_patient_appointments(
+    current_patient: Patient = Depends(get_current_patient),
+    db: Session = Depends(get_db)
+):
+    return (
+        db.query(DoctorAppointment)
+        .filter(DoctorAppointment.patient_id == current_patient.id)
+        .order_by(DoctorAppointment.appointment_date.asc(), DoctorAppointment.appointment_time.asc())
+        .all()
+    )
 
 # --- Daily Routines ---
 @router.get("", response_model=List[RoutineOut])
@@ -138,6 +151,52 @@ def delete_medication(
     db.commit()
     return {"message": "Medication deleted"}
 
+@router.post("/{routine_id}/toggle-status")
+def toggle_routine_status(
+    routine_id: int,
+    current_patient: Patient = Depends(get_current_patient),
+    db: Session = Depends(get_db)
+):
+    r = (
+        db.query(DailyRoutine)
+        .filter(DailyRoutine.id == routine_id, DailyRoutine.patient_id == current_patient.id)
+        .first()
+    )
+    if not r:
+        raise HTTPException(status_code=404, detail="Routine not found")
+    new_status = "scheduled" if r.status == "completed" else "completed"
+    r.status = new_status
+    if new_status == "completed":
+        r.completed_at = datetime.utcnow()
+    
+    # Log to ActivityLog
+    act_log = ActivityLog(
+        routine_id=r.id,
+        patient_id=current_patient.id,
+        scheduled_time=r.time,
+        status=new_status,
+        completed_at=datetime.utcnow() if new_status == "completed" else None,
+        created_at=datetime.utcnow()
+    )
+    db.add(act_log)
+
+    # Notify caregiver on completion
+    if new_status == "completed":
+        notif = Notification(
+            patient_id=current_patient.id,
+            recipient_role="guardian",
+            title="Activity completed",
+            message=f"{current_patient.name} completed '{r.title}', scheduled for {r.time}.",
+            notification_type="activity",
+            is_read=False,
+            created_at=datetime.utcnow()
+        )
+        db.add(notif)
+
+    db.commit()
+    db.refresh(r)
+    return {"id": r.id, "status": r.status}
+
 @router.post("/medications/{med_id}/log-taken")
 def log_medication_taken(
     med_id: int,
@@ -151,6 +210,48 @@ def log_medication_taken(
     )
     if not med:
         raise HTTPException(status_code=404, detail="Medication not found")
+    
+    now_dt = datetime.utcnow()
     med.last_taken_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+    med.last_taken_at = now_dt
+    med.last_status = "completed"
+    
+    # Decrement stock count
+    if med.current_stock is not None and med.current_stock > 0:
+        med.current_stock -= 1
+        if med.refill_threshold is not None and med.current_stock <= med.refill_threshold:
+            med.needs_refill = True
+
+    # Record MedicationLog
+    med_log = MedicationLog(
+        medication_id=med.id,
+        patient_id=current_patient.id,
+        scheduled_time=med.schedule_time or "",
+        scheduled_date=datetime.utcnow().strftime("%Y-%m-%d"),
+        status="completed",
+        taken_at=now_dt,
+        created_at=now_dt
+    )
+    db.add(med_log)
+
+    # Notify caregiver
+    notif = Notification(
+        patient_id=current_patient.id,
+        recipient_role="guardian",
+        title="Medication intake confirmed",
+        message=f"{current_patient.name} took {med.name} ({med.dosage or 'scheduled dose'}).",
+        notification_type="medication",
+        is_read=False,
+        created_at=now_dt
+    )
+    db.add(notif)
+
     db.commit()
-    return {"message": f"Logged {med.name} as taken", "last_taken": med.last_taken_date}
+    db.refresh(med)
+    return {
+        "message": f"Logged {med.name} as taken",
+        "last_taken": med.last_taken_date,
+        "current_stock": med.current_stock,
+        "last_status": med.last_status
+    }
+

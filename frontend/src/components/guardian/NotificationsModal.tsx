@@ -111,7 +111,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
                     isDark ? 'bg-slate-850' : 'bg-white border border-slate-200'
                   }`}>
-                    {getTypeIcon(notif.notification_type)}
+                    {getTypeIcon(notif.notification_type || notif.type || 'system')}
                   </div>
                   <div className="min-w-0">
                     <p className={`text-xs font-bold ${

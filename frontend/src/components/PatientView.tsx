@@ -58,10 +58,13 @@ import {
   resolveActiveTheme,
   applyThemeToDOM
 } from '../services/theme';
-import { QueryResponse, PatientProfile, DailyRoutine, Medication, Person } from '../types';
+import { QueryResponse, PatientProfile, DailyRoutine, Medication, Person, DoctorAppointment } from '../types';
+import { DEMO_APPOINTMENTS } from '../services/demoData';
 import { evaluateUpcomingActivity, EvaluatedActivity } from '../services/activityEvaluator';
 import { AboutMeSection } from './AboutMeSection';
 import { FloatingSOS } from './FloatingSOS';
+import { patientTracker } from '../services/patientTracker';
+import { LanguageToggle } from '../services/language';
 
 interface PatientViewProps {
   onLogout?: () => void;
@@ -145,6 +148,7 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
   const [routinesList, setRoutinesList] = useState<DailyRoutine[]>([]);
   const [medicationsList, setMedicationsList] = useState<Medication[]>([]);
   const [peopleList, setPeopleList] = useState<Person[]>([]);
+  const [appointmentsList, setAppointmentsList] = useState<DoctorAppointment[]>([]);
   const [medTakenMap, setMedTakenMap] = useState<Record<number, string>>({});
 
   // Dynamic live clock & routine sync
@@ -280,22 +284,33 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
     return () => clearInterval(interval);
   }, []);
 
+  // Real-time GPS location tracking on patient's device
+  useEffect(() => {
+    patientTracker.startTracking();
+    return () => {
+      patientTracker.stopTracking();
+    };
+  }, []);
+
   // Fetch domain records from backend
   useEffect(() => {
     let isMounted = true;
     const fetchDashboardData = async () => {
       try {
-        const [rData, mData, pData, sugs] = await Promise.all([
+        const [rData, mData, pData, sugs, apptsData] = await Promise.all([
           api.getRoutines().catch(() => []),
           api.getMedications().catch(() => []),
           api.getPeople().catch(() => []),
-          api.getSuggestions().catch(() => [])
+          api.getSuggestions().catch(() => []),
+          api.getPatientAppointments().catch(() => [])
         ]);
         if (isMounted) {
           setRoutinesList(rData);
           setMedicationsList(mData);
           setPeopleList(pData);
           if (sugs && sugs.length > 0) setSuggestions(sugs);
+          const effectiveAppts = (apptsData && apptsData.length > 0) ? apptsData : DEMO_APPOINTMENTS;
+          setAppointmentsList(effectiveAppts);
         }
       } catch (err) {
         console.error('Error fetching dashboard records', err);
@@ -697,22 +712,20 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
             <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#5E58E7]" />
           </div>
           <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
-              <h1 className="text-xl font-bold tracking-tight text-white leading-tight group-hover:text-amber-200 transition-colors">
-                {displayName}
-              </h1>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-white/20 text-indigo-100 border border-white/20">
-                ID / QR
-              </span>
-            </div>
+            <h1 className="text-xl font-bold tracking-tight text-white leading-tight group-hover:text-amber-200 transition-colors">
+              {displayName}
+            </h1>
             <span className="text-[11px] font-medium text-indigo-100/90">
               ATTI Companion
             </span>
           </div>
         </button>
 
-        {/* Right: Theme Toggle, Notifications Bell & Logout */}
+        {/* Right: Language Toggle, Theme Toggle, Notifications Bell & Logout */}
         <div className="flex items-center gap-2">
+          {/* Global Language Toggle */}
+          <LanguageToggle variant="header" />
+
           {/* Dynamic Theme Indicator & Toggle */}
           <button
             type="button"
@@ -1703,6 +1716,89 @@ export const PatientView: React.FC<PatientViewProps> = ({ onLogout, patient }) =
             ) : (
               <div className={`p-4 ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500'} rounded-2xl text-center text-xs`}>
                 No medications configured.
+              </div>
+            )}
+          </div>
+
+          {/* Doctor Consultations & Care Advice Section */}
+          <div className={`pt-2 border-t ${isDark ? 'border-slate-800' : 'border-slate-100'} space-y-3`}>
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-[#5E58E7]" />
+                <span>Doctor Visits & Care Advice</span>
+              </div>
+              <span className={`text-[11px] font-semibold ${isDark ? 'text-indigo-400' : 'text-[#5E58E7]'}`}>
+                Synced with Caregiver
+              </span>
+            </div>
+
+            {/* Upcoming Visits */}
+            {appointmentsList.filter(a => a.status === 'scheduled').slice(0, 2).map((appt) => {
+              const apptId = `appt-${appt.id}`;
+              const apptSpeech = `Upcoming doctor visit with ${appt.doctor_name} at ${appt.clinic_or_hospital} on ${appt.appointment_date} at ${appt.appointment_time}. ${appt.preparation_note || ''}`;
+
+              return (
+                <div
+                  key={appt.id}
+                  className={`p-4 rounded-2xl border transition-all ${
+                    isDark ? 'bg-slate-800/80 border-slate-700/80' : 'bg-slate-50/90 border-slate-200/80'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0">
+                        {appt.doctor_name.replace(/^Dr\.?\s+/i, '').substring(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                            {appt.doctor_name}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            Upcoming Visit
+                          </span>
+                        </div>
+                        <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'} mt-0.5`}>
+                          {appt.specialty || 'Doctor'} · {appt.clinic_or_hospital}
+                        </p>
+                        <p className={`text-xs font-semibold ${isDark ? 'text-indigo-400' : 'text-[#5E58E7]'} mt-1`}>
+                          {appt.appointment_date} · {appt.appointment_time}
+                        </p>
+                        {appt.preparation_note && (
+                          <div className="mt-2 text-xs font-medium bg-amber-50 border border-amber-200 rounded-lg p-2 text-amber-900">
+                            <strong>Note: </strong>{appt.preparation_note}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {renderSpeakerControl(apptId, apptSpeech)}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Past Advice Card from Doctor */}
+            {appointmentsList.some(a => a.status === 'completed' && a.preparation_note) && (
+              <div className={`p-4 rounded-2xl border ${
+                isDark ? 'bg-indigo-950/40 border-indigo-900/60' : 'bg-indigo-50/60 border-indigo-100'
+              }`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#5E58E7] block">
+                      Doctor's Clinical Advice
+                    </span>
+                    <p className={`text-xs ${isDark ? 'text-indigo-200' : 'text-indigo-950'} font-medium leading-relaxed`}>
+                      "{appointmentsList.find(a => a.status === 'completed' && a.preparation_note)?.preparation_note || 'Continue daily walking and drink warm water.'}"
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      From {appointmentsList.find(a => a.status === 'completed')?.doctor_name}
+                    </p>
+                  </div>
+                  {renderSpeakerControl(
+                    'doctor-past-advice',
+                    `Doctor's advice from ${appointmentsList.find(a => a.status === 'completed')?.doctor_name}: ${appointmentsList.find(a => a.status === 'completed' && a.preparation_note)?.preparation_note || ''}`
+                  )}
+                </div>
               </div>
             )}
           </div>

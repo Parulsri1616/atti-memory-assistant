@@ -10,12 +10,14 @@ import {
   Shield,
   Clock,
   PlayCircle,
-  AlertCircle
+  AlertCircle,
+  UserPlus
 } from 'lucide-react';
 import attiLogo from '../assets/atti-care-logo.png';
 import { api } from '../services/api';
 import { PatientProfile } from '../types';
 import { useLanguage, LanguageToggle } from '../services/language';
+import { FamilyPatientOnboardingView } from './FamilyPatientOnboardingView';
 
 // Custom vector icons crafted in the expressive line-art aesthetic of the ATTI family logo
 export const PatientVectorIcon: React.FC<{ className?: string }> = ({ className = "w-7 h-7" }) => (
@@ -88,6 +90,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
   const { t, language } = useLanguage();
   const [selectedRole, setSelectedRole] = useState<'patient' | 'family' | null>('patient');
   const [patientAuthMode, setPatientAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
 
   // Form states
   const [email, setEmail] = useState('');
@@ -199,6 +202,15 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
       setIsLoading(false);
     }
   };
+
+  if (showOnboarding) {
+    return (
+      <FamilyPatientOnboardingView
+        onCompleted={onAuthenticated}
+        onCancel={() => setShowOnboarding(false)}
+      />
+    );
+  }
 
   return (
     <div className="w-full min-h-screen bg-white text-slate-800 flex flex-col items-center justify-start p-4 sm:p-6 md:p-8">
@@ -358,13 +370,25 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
 
             {/* Demo access for Family Member */}
             <button
+              id="btn-demo-family-member"
               type="button"
               onClick={() => handleDemoLogin('family')}
               disabled={isLoading}
-              className="w-full mb-2.5 py-3 bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-700 hover:to-indigo-700 active:scale-95 text-white font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-xs sm:text-sm cursor-pointer"
+              className="w-full mb-2 py-3 bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-700 hover:to-indigo-700 active:scale-95 text-white font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-xs sm:text-sm cursor-pointer"
             >
               <PlayCircle className="w-4 h-4 text-rose-200" />
               <span>{loadingRole === 'family' ? t('welcome.demo_family_authenticating') : t('welcome.demo_family_title')}</span>
+            </button>
+
+            {/* New Family Member Registration & Patient Onboarding */}
+            <button
+              id="btn-family-onboarding"
+              type="button"
+              onClick={() => setShowOnboarding(true)}
+              className="w-full mb-2.5 py-3 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-xs sm:text-sm cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4 text-indigo-300" />
+              <span>Create Account & Onboard Patient</span>
             </button>
 
             <button
@@ -407,6 +431,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
+                        id="input-patient-email"
                         type="text"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -424,6 +449,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
+                        id="input-patient-password"
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -435,6 +461,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                   </div>
 
                   <button
+                    id="btn-patient-signin"
                     type="submit"
                     disabled={isLoading}
                     className="w-full mt-1 py-3 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-sm disabled:bg-slate-400 cursor-pointer"
@@ -444,18 +471,19 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onAuthenticated }) => 
                   </button>
                 </form>
 
-                {/* Under submit button: Don't have an account? Sign Up */}
+                {/* Under submit button: Don't have an account? Create Account */}
                 <div className="text-center text-xs text-slate-500 mt-1">
                   {t('welcome.no_account')}{' '}
                   <button
+                    id="btn-create-account"
                     type="button"
                     onClick={() => {
-                      setPatientAuthMode('signup');
+                      setShowOnboarding(true);
                       resetFields();
                     }}
                     className="font-bold text-sky-600 hover:text-sky-700 hover:underline transition-all cursor-pointer"
                   >
-                    {t('welcome.signup_link')}
+                    {t('welcome.signup_link')} (Family & Patient Onboarding)
                   </button>
                 </div>
               </>

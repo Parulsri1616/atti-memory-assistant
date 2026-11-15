@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Shield, Phone, Heart, AlertCircle, ArrowLeft, CheckCircle, MapPin, User, Activity } from 'lucide-react';
 import { api } from '../services/api';
 import { EmergencyProfile } from '../types';
+import { LanguageToggle } from '../services/language';
 
 interface EmergencyAssistViewProps {
   patientId: number;
@@ -80,6 +81,9 @@ export const EmergencyAssistView: React.FC<EmergencyAssistViewProps> = ({
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden">
         {/* Top Emergency Banner */}
         <div className="bg-gradient-to-r from-rose-600 via-rose-500 to-indigo-600 p-5 text-white text-center relative">
+          <div className="absolute top-3 right-3">
+            <LanguageToggle variant="header" />
+          </div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold mb-2">
             <Shield className="w-3.5 h-3.5" />
             <span>Emergency Assistance Identification</span>

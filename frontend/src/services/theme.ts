@@ -10,30 +10,24 @@ export type ActiveTheme = 'light' | 'dark';
 const THEME_STORAGE_KEY = 'atti_theme_preference';
 
 /**
- * Determine theme based on patient's device local time:
- * Daytime: 6:00 AM (inclusive) to 6:00 PM (exclusive) -> Light Mode
- * Evening/Nighttime: 6:00 PM to 6:00 AM -> Dark Mode
+ * Default to Light Mode as standard UI baseline across all portals.
  */
 export function getTimeBasedTheme(date: Date = new Date()): ActiveTheme {
-  const hour = date.getHours();
-  if (hour >= 6 && hour < 18) {
-    return 'light';
-  }
-  return 'dark';
+  return 'light';
 }
 
 /**
- * Retrieve user manual preference from localStorage, defaulting to 'auto'.
+ * Retrieve user manual preference from localStorage, defaulting to 'light'.
  */
 export function getStoredThemeMode(): ThemeMode {
-  if (typeof window === 'undefined') return 'auto';
+  if (typeof window === 'undefined') return 'light';
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark' || stored === 'auto') {
+    if (stored === 'light' || stored === 'dark') {
       return stored;
     }
   } catch {}
-  return 'auto';
+  return 'light';
 }
 
 /**
@@ -50,9 +44,8 @@ export function storeThemeMode(mode: ThemeMode): void {
  * Resolve current active theme from mode.
  */
 export function resolveActiveTheme(mode: ThemeMode, date: Date = new Date()): ActiveTheme {
-  if (mode === 'light') return 'light';
   if (mode === 'dark') return 'dark';
-  return getTimeBasedTheme(date);
+  return 'light';
 }
 
 /**

@@ -301,9 +301,6 @@ export const CaregiverVoiceAssistantModal: React.FC<CaregiverVoiceAssistantModal
                 >
                   {isHindi ? 'ATTI वॉयस सहायक' : 'ATTI Voice Assistant'}
                 </h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/25 text-emerald-200 border border-emerald-400/30 shrink-0">
-                  {isHindi ? 'सक्रिय' : 'Live Audio'}
-                </span>
               </div>
               <p className="text-xs text-indigo-100/90 truncate mt-0.5">
                 {isHindi
@@ -540,7 +537,7 @@ export const CaregiverVoiceAssistantModal: React.FC<CaregiverVoiceAssistantModal
             <button
               type="button"
               onClick={handleToggleMic}
-              className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-95 shrink-0 cursor-pointer shadow-md ${
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all active:scale-95 shrink-0 cursor-pointer shadow-md ${
                 isListening
                   ? 'bg-rose-500 text-white animate-pulse ring-4 ring-rose-500/30'
                   : isDark
@@ -550,7 +547,7 @@ export const CaregiverVoiceAssistantModal: React.FC<CaregiverVoiceAssistantModal
               title={isListening ? 'Stop listening' : 'Speak via microphone'}
               aria-label="Toggle voice input"
             >
-              {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              {isListening ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
             </button>
 
             {/* Text Input Field */}

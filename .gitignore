@@ -14,3 +14,9 @@ build/
 # ATTI local database
 backend/atti.db
 backend/*.db
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+backend/.env

@@ -72,9 +72,17 @@ def evaluate_patient_activities_and_deadlines(db: Session, patient: Patient, gra
             continue
 
         try:
-            parts = r.time.strip().split(":")
+            time_str = r.time.strip().upper()
+            is_pm = "PM" in time_str
+            is_am = "AM" in time_str
+            clean_time = time_str.replace("AM", "").replace("PM", "").strip()
+            parts = clean_time.split(":")
             r_hour = int(parts[0])
             r_min = int(parts[1]) if len(parts) > 1 else 0
+            if is_pm and r_hour < 12:
+                r_hour += 12
+            elif is_am and r_hour == 12:
+                r_hour = 0
             routine_total_minutes = r_hour * 60 + r_min
         except Exception:
             continue
@@ -143,9 +151,12 @@ def evaluate_patient_activities_and_deadlines(db: Session, patient: Patient, gra
                         related_entity_id=r.id,
                         is_read=False
                     ))
+        elif current_minutes <= deadline_minutes:
+            # If the activity's deadline has not passed yet today, it cannot be missed
+            if r.status == "missed":
+                r.status = "scheduled"
 
-    if missed_count > 0:
-        db.commit()
+    db.commit()
 
     return missed_count
 

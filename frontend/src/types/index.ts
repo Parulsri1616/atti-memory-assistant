@@ -13,6 +13,7 @@ export interface PatientProfile {
   age?: number;
   date_of_birth?: string;
   address?: string;
+  phone?: string;
   emergency_contact_phone?: string;
   emergency_contact_relation?: string;
   blood_group?: string;
@@ -37,6 +38,109 @@ export interface AuthResponse {
   patient: PatientProfile;
 }
 
+export interface OnboardingMedicationItem {
+  name: string;
+  dosage?: string;
+  schedule_time: string;
+  timing_slot?: string;
+  frequency?: string;
+  instructions?: string;
+  purpose?: string;
+  current_stock?: number;
+  refill_threshold?: number;
+}
+
+export interface OnboardingAppointmentItem {
+  doctor_name: string;
+  clinic_or_hospital: string;
+  appointment_date: string;
+  appointment_time: string;
+  notes?: string;
+  advance_reminder_hours?: number;
+}
+
+export interface OnboardingRoutineItem {
+  time: string;
+  title: string;
+  category?: string;
+  description?: string;
+  repeat_frequency?: string;
+}
+
+export interface OnboardingContactItem {
+  name: string;
+  relationship: string;
+  phone?: string;
+  notes?: string;
+}
+
+export interface OnboardingPlaceItem {
+  name: string;
+  address_or_location: string;
+  category?: string;
+  description?: string;
+}
+
+export interface OnboardingMemoryFactItem {
+  category: string;
+  question_or_topic: string;
+  answer_or_detail: string;
+}
+
+export interface OnboardingLifeEventItem {
+  title: string;
+  date_or_period?: string;
+  category?: string;
+  description: string;
+}
+
+export interface OnboardingPersonalItemDef {
+  item_name: string;
+  location: string;
+  notes?: string;
+  keywords?: string;
+}
+
+export interface FamilyPatientOnboardingPayload {
+  family_name: string;
+  family_email: string;
+  family_password: string;
+  family_relationship?: string;
+  family_phone?: string;
+
+  patient_name: string;
+  patient_email: string;
+  patient_password: string;
+  patient_call_sign?: string;
+  patient_age?: number;
+  patient_dob?: string;
+  patient_address?: string;
+  preferred_language?: string;
+
+  blood_group?: string;
+  medical_conditions?: string;
+  allergies?: string;
+  care_instructions?: string;
+  doctor_name?: string;
+  doctor_phone?: string;
+  doctor_clinic?: string;
+
+  emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
+  safe_zone_name?: string;
+  safe_zone_radius?: number;
+  safe_zone_address?: string;
+
+  medications?: OnboardingMedicationItem[];
+  appointments?: OnboardingAppointmentItem[];
+  routines?: OnboardingRoutineItem[];
+  contacts?: OnboardingContactItem[];
+  places?: OnboardingPlaceItem[];
+  memory_facts?: OnboardingMemoryFactItem[];
+  life_events?: OnboardingLifeEventItem[];
+  personal_items?: OnboardingPersonalItemDef[];
+}
+
 export interface Person {
   id: number;
   name: string;
@@ -59,7 +163,7 @@ export interface DailyRoutine {
   day_of_week: string;
   scheduled_date?: string;
   repeat_frequency?: string;
-  status?: 'scheduled' | 'pending' | 'acknowledged' | 'completed' | 'snoozed' | 'missed' | 'cancelled';
+  status?: 'scheduled' | 'pending' | 'acknowledged' | 'completed' | 'snoozed' | 'missed' | 'cancelled' | 'upcoming';
   reminder_minutes_before?: number;
   acknowledged_at?: string;
   completed_at?: string;
@@ -105,11 +209,107 @@ export interface DoctorAppointment {
   clinic_or_hospital: string;
   appointment_date: string;
   appointment_time: string;
+  specialty?: string;
   notes?: string;
+  preparation_note?: string;
   advance_reminder_hours?: number;
   follow_up_reminder_date?: string;
   status: 'scheduled' | 'completed' | 'cancelled';
   created_at: string;
+  doctor_phone?: string;
+  clinic_phone?: string;
+  consultation_detail?: ConsultationDetail;
+}
+
+export interface PrescribedMedicine {
+  name: string;
+  dosage: string;
+  timing: string;
+  frequency: string;
+  duration: string;
+  instructions: string;
+}
+
+export interface ConsultationDetail {
+  id: number;
+  doctor_name: string;
+  specialty: string;
+  clinic_or_hospital: string;
+  appointment_date: string;
+  appointment_time: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  reason_for_visit: string;
+  preparation_note?: string;
+  clinical_summary?: string;
+  diagnosis?: string;
+  rx_number?: string;
+  prescribed_medications?: PrescribedMedicine[];
+  doctor_advice?: string[];
+  vitals_recorded?: {
+    bp?: string;
+    pulse?: string;
+    weight?: string;
+    blood_sugar?: string;
+    hba1c?: string;
+  };
+  lab_tests?: Array<{
+    name: string;
+    result: string;
+    status: 'normal' | 'attention' | 'pending';
+  }>;
+  follow_up_date?: string;
+  doctor_phone?: string;
+  clinic_phone?: string;
+  location_address?: string;
+}
+
+export interface CareProtocolItem {
+  id: number;
+  title: string;
+  category: 'calming' | 'diet' | 'mobility' | 'emergency' | 'hygiene';
+  category_label: string;
+  priority: 'Critical' | 'Strict Medical' | 'High Priority' | 'Urgent' | 'Daily Essential';
+  priority_badge: string;
+  description: string;
+  steps: string[];
+  avoid_triggers?: string;
+  last_reviewed?: string;
+}
+
+export interface HandoverNoteItem {
+  id: number;
+  author_name: string;
+  author_role: string;
+  timestamp: string;
+  category: string;
+  content: string;
+  vitals_recorded?: string;
+  mood?: string;
+}
+
+export interface CareObservationItem {
+  id: number;
+  timestamp: string;
+  author_name: string;
+  author_role: string;
+  domain: 'Mood & Demeanor' | 'Sleep & Rest' | 'Physical Mobility' | 'Memory & Speech' | 'Nutrition & Hydration' | 'Vitals & General';
+  observation: string;
+  severity: 'positive' | 'stable' | 'monitor';
+  action_taken?: string;
+}
+
+export interface WellbeingPatternItem {
+  id: string;
+  title: string;
+  domain: string;
+  status: 'improving' | 'stable' | 'optimal' | 'attention';
+  status_label: string;
+  trend_summary: string;
+  observation_detail: string;
+  key_metric: string;
+  metric_change: string;
+  recommendation: string;
+  timeframe: string;
 }
 
 export interface FamiliarPlace {
@@ -169,6 +369,7 @@ export interface SOSAlert {
   acknowledged_by?: string;
   resolved_at?: string;
   notes?: string;
+  device_type?: string;
 }
 
 export interface EmergencyQR {
@@ -198,14 +399,16 @@ export interface CareTeamMember {
 
 export interface NotificationItem {
   id: number;
-  patient_id: number;
-  recipient_role: string;
+  patient_id?: number;
+  recipient_role?: string;
   title: string;
   message: string;
-  notification_type: string;
+  notification_type?: string;
   is_read: boolean;
   related_entity_type?: string;
   related_entity_id?: number;
+  severity?: 'info' | 'warning' | 'emergency';
+  type?: string;
   created_at: string;
 }
 

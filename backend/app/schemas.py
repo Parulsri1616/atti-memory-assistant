@@ -21,6 +21,107 @@ class RefreshTokenRequest(BaseModel):
 class DemoLoginRequest(BaseModel):
     role: Optional[str] = Field("patient", description="Demo role: 'patient' or 'family' / 'caregiver'")
 
+# --- Family-Led Patient Onboarding Schemas ---
+class OnboardingMedication(BaseModel):
+    name: str = Field(..., description="Medication name")
+    dosage: Optional[str] = Field("500mg", description="Dosage")
+    schedule_time: str = Field(..., description="Schedule time e.g. '08:30 AM (After Breakfast)'")
+    timing_slot: Optional[str] = Field("Morning", description="Morning / Afternoon / Evening / Night")
+    frequency: Optional[str] = Field("Every day", description="Frequency")
+    instructions: Optional[str] = None
+    purpose: Optional[str] = None
+    current_stock: Optional[int] = 30
+    refill_threshold: Optional[int] = 5
+
+class OnboardingAppointment(BaseModel):
+    doctor_name: str
+    clinic_or_hospital: str
+    appointment_date: str
+    appointment_time: str
+    notes: Optional[str] = None
+    advance_reminder_hours: Optional[int] = 24
+
+class OnboardingRoutine(BaseModel):
+    time: str = Field(..., description="24-hour time string e.g. '08:00'")
+    title: str
+    category: Optional[str] = "activity"
+    description: Optional[str] = None
+    repeat_frequency: Optional[str] = "Daily"
+
+class OnboardingContact(BaseModel):
+    name: str
+    relationship: str
+    phone: Optional[str] = None
+    notes: Optional[str] = None
+
+class OnboardingPlace(BaseModel):
+    name: str
+    address_or_location: str
+    category: Optional[str] = "frequent"
+    description: Optional[str] = None
+
+class OnboardingMemoryFact(BaseModel):
+    category: str = "habit"
+    question_or_topic: str
+    answer_or_detail: str
+
+class OnboardingLifeEvent(BaseModel):
+    title: str
+    date_or_period: Optional[str] = None
+    category: Optional[str] = "memory"
+    description: str
+
+class OnboardingPersonalItem(BaseModel):
+    item_name: str
+    location: str
+    notes: Optional[str] = None
+    keywords: Optional[str] = None
+
+class FamilyPatientOnboardingRequest(BaseModel):
+    # 1. Family Member (Caregiver) Account
+    family_name: str = Field(..., min_length=2, max_length=100)
+    family_email: str = Field(..., min_length=4, max_length=120)
+    family_password: str = Field(..., min_length=6, max_length=128)
+    family_relationship: Optional[str] = Field("Daughter", max_length=50)
+    family_phone: Optional[str] = Field(None, max_length=50)
+
+    # 2. Patient Account & Identity
+    patient_name: str = Field(..., min_length=2, max_length=100)
+    patient_email: str = Field(..., min_length=4, max_length=120)
+    patient_password: str = Field(..., min_length=6, max_length=128)
+    patient_call_sign: Optional[str] = Field(None, max_length=50)
+    patient_age: Optional[int] = Field(None, ge=1, le=130)
+    patient_dob: Optional[str] = Field(None, max_length=50)
+    patient_address: Optional[str] = Field(None, max_length=255)
+    preferred_language: Optional[str] = Field("English / Hindi", max_length=50)
+
+    # 3. Medical & Doctor Information
+    blood_group: Optional[str] = Field(None, max_length=20)
+    medical_conditions: Optional[str] = None
+    allergies: Optional[str] = None
+    care_instructions: Optional[str] = None
+    doctor_name: Optional[str] = None
+    doctor_phone: Optional[str] = None
+    doctor_clinic: Optional[str] = None
+
+    # 4. Emergency & Safe Zone
+    emergency_contact_phone: Optional[str] = None
+    emergency_contact_relation: Optional[str] = None
+    safe_zone_name: Optional[str] = "Home Safe Zone"
+    safe_zone_radius: Optional[int] = 500
+    safe_zone_address: Optional[str] = None
+
+    # 5. Domain collections
+    medications: Optional[List[OnboardingMedication]] = []
+    appointments: Optional[List[OnboardingAppointment]] = []
+    routines: Optional[List[OnboardingRoutine]] = []
+    contacts: Optional[List[OnboardingContact]] = []
+    places: Optional[List[OnboardingPlace]] = []
+    memory_facts: Optional[List[OnboardingMemoryFact]] = []
+    life_events: Optional[List[OnboardingLifeEvent]] = []
+    personal_items: Optional[List[OnboardingPersonalItem]] = []
+
+
 class PatientProfile(BaseModel):
     id: int
     email: str

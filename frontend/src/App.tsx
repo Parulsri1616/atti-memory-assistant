@@ -116,19 +116,19 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center">
+    <div className="min-h-screen bg-slate-100 flex flex-col items-center">
       {/* Main View Container */}
       <div className="flex-1 w-full flex items-center justify-center p-0 sm:p-4 md:p-6 overflow-y-auto">
         {deviceFrame && !isCaregiverAccount ? (
           /* Realistic Phone Bezel Frame */
-          <div className="w-full max-w-md h-[92vh] max-h-[880px] bg-white dark:bg-slate-950 rounded-none sm:rounded-[44px] shadow-2xl border-0 sm:border-[8px] sm:border-slate-800 overflow-hidden flex flex-col relative ring-1 ring-slate-800/20 transition-colors">
+          <div className="w-full max-w-md h-[92vh] max-h-[880px] bg-white rounded-none sm:rounded-[44px] shadow-2xl border-0 sm:border-[8px] sm:border-slate-800 overflow-hidden flex flex-col relative ring-1 ring-slate-800/20">
             <div className="flex-1 overflow-y-auto w-full">
               {renderActiveView()}
             </div>
           </div>
         ) : (
           /* Full Width Responsive View (Especially great for Caregiver Dashboard & Desktop) */
-          <div className="w-full max-w-5xl bg-slate-50 dark:bg-slate-950 min-h-screen rounded-none sm:rounded-3xl shadow-xl overflow-hidden flex flex-col transition-colors">
+          <div className="w-full max-w-5xl bg-white min-h-screen rounded-none sm:rounded-3xl shadow-xl overflow-hidden flex flex-col">
             {renderActiveView()}
           </div>
         )}
