@@ -25,7 +25,7 @@ def get_db():
 def init_db_and_migrate():
     """
     Ensures all database tables exist and applies backward-compatible column migrations
-    for SQLite without data loss or dropping tables.
+    for SQLite and PostgreSQL without data loss or dropping tables.
     """
     from sqlalchemy import inspect, text
     Base.metadata.create_all(bind=engine)
@@ -87,9 +87,9 @@ def init_db_and_migrate():
             if "reminder_minutes_before" not in columns:
                 conn.execute(text("ALTER TABLE daily_routines ADD COLUMN reminder_minutes_before INTEGER DEFAULT 15"))
             if "acknowledged_at" not in columns:
-                conn.execute(text("ALTER TABLE daily_routines ADD COLUMN acknowledged_at DATETIME"))
+                conn.execute(text("ALTER TABLE daily_routines ADD COLUMN acknowledged_at TIMESTAMP"))
             if "completed_at" not in columns:
-                conn.execute(text("ALTER TABLE daily_routines ADD COLUMN completed_at DATETIME"))
+                conn.execute(text("ALTER TABLE daily_routines ADD COLUMN completed_at TIMESTAMP"))
 
         if "medications" in inspector.get_table_names():
             columns = [col["name"] for col in inspector.get_columns("medications")]
@@ -108,12 +108,12 @@ def init_db_and_migrate():
             if "refill_reminder_days" not in columns:
                 conn.execute(text("ALTER TABLE medications ADD COLUMN refill_reminder_days INTEGER DEFAULT 5"))
             if "needs_refill" not in columns:
-                conn.execute(text("ALTER TABLE medications ADD COLUMN needs_refill BOOLEAN DEFAULT 0"))
+                conn.execute(text("ALTER TABLE medications ADD COLUMN needs_refill BOOLEAN DEFAULT FALSE"))
             if "last_status" not in columns:
                 conn.execute(text("ALTER TABLE medications ADD COLUMN last_status VARCHAR(30) DEFAULT 'pending'"))
             if "last_acknowledged_at" not in columns:
-                conn.execute(text("ALTER TABLE medications ADD COLUMN last_acknowledged_at DATETIME"))
+                conn.execute(text("ALTER TABLE medications ADD COLUMN last_acknowledged_at TIMESTAMP"))
             if "last_taken_at" not in columns:
-                conn.execute(text("ALTER TABLE medications ADD COLUMN last_taken_at DATETIME"))
+                conn.execute(text("ALTER TABLE medications ADD COLUMN last_taken_at TIMESTAMP"))
 
         conn.commit()

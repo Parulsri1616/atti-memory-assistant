@@ -11,7 +11,12 @@ class Settings:
     API_PREFIX: str = "/api"
 
     # SQLite Database file location
-    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/atti.db")
+    _database_url: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/atti.db")
+    DATABASE_URL: str = (
+        _database_url.replace("postgres://", "postgresql://", 1)
+        if _database_url.startswith("postgres://")
+        else _database_url
+    )
 
     # LLM Settings (supports Gemini, OpenAI, or Built-in Offline Mode)
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
